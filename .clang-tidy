@@ -1,0 +1,125 @@
+Checks: >
+    -*,
+    bugprone-*,
+    # cppcoreguidelines-*,
+    google-*,
+    # hicpp-*,
+    # misc-*,
+
+    # bugprone
+    bugprone-assert-side-effect,
+    bugprone-bad-signal-to-kill-thread,
+    bugprone-bool-pointer-implicit-conversion,
+    bugprone-branch-clone,
+    bugprone-copy-constructor-init,
+    bugprone-dangling-handle,
+    bugprone-dynamic-static-initializers,
+    bugprone-easily-swappable-parameters,
+    bugprone-exception-escape,
+    bugprone-forward-declaration-namespace,
+    bugprone-forwarding-reference-overload,
+    bugprone-implicit-widening-of-multiplication-result,
+
+    # cert
+    cert-dcl21-cpp,
+    cert-dcl58-cpp,
+    cert-env33-c,
+    cert-err34-c,
+    cert-err52-cpp,
+    cert-err58-cpp,
+    cert-err60-cpp,
+    cert-flp30-c,
+    cert-mem57-cpp,
+    cert-oop58-cpp,
+
+    # modern c++ check
+    modernize-avoid-bind,
+    modernize-concat-nested-namespaces,
+    modernize-deprecated-headers,
+    modernize-deprecated-ios-base-aliases,
+    modernize-loop-convert,
+    modernize-make-shared,
+    modernize-make-unique,
+    modernize-raw-string-literal,
+    modernize-replace-auto-ptr,
+    modernize-replace-disallow-copy-and-assign-macro,
+    modernize-replace-random-shuffle,
+    modernize-shrink-to-fit,
+    modernize-unary-static-assert,
+    modernize-use-auto,
+    modernize-use-bool-literals,
+    modernize-use-default-member-init,
+    modernize-use-emplace,
+    modernize-use-equals-default,
+    modernize-use-equals-delete,
+    modernize-use-nodiscard,
+    modernize-use-noexcept,
+    modernize-use-nullptr,
+    modernize-use-override,
+    modernize-use-uncaught-exceptions,
+    modernize-use-using,
+
+    # performance
+    performance-faster-string-find,
+    performance-for-range-copy,
+    performance-implicit-conversion-in-loop,
+    performance-inefficient-algorithm,
+    performance-inefficient-vector-operation,
+    performance-move-const-arg,
+    # performance-move-constructor-init,
+    performance-no-automatic-move,
+    performance-noexcept-move-constructor,
+    performance-trivially-destructible,
+    performance-type-promotion-in-math-fn,
+    performance-unnecessary-copy-initialization,
+    performance-unnecessary-value-param,
+
+    # performance-*,
+    # readability-*,
+
+FormatStyle:     file
+User:            45degree
+
+CheckOptions:
+  - key: readability-identifier-naming.NamespaceCase
+    value: CamelCase
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.TemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.FunctionCase
+    value: CamelCase
+  - key: readability-identifier-naming.VariableCase
+    value: camelCase
+  - key: readability-identifier-naming.ClassMemberCase
+    value: camelCase
+  - key: readability-identifier-naming.ClassMemberSuffix
+    value: _
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: _
+  - key: readability-identifier-naming.ProtectedMemberSuffix
+    value: _
+  - key: readability-identifier-naming.EnumConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.ConstexprVariableCase
+    value: camelCase
+  - key: readability-identifier-naming.ConstexprVariablePrefix
+    value: _
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: camelCase
+  - key: readability-identifier-naming.GlobalConstantPrefix
+    value: _
+  - key: readability-identifier-naming.MemberConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.MemberConstantPrefix
+    value: _
+  - key: readability-identifier-naming.StaticConstantCase
+    value: camelCase
+  - key: readability-identifier-naming.StaticConstantPrefix
+    value: _
+  - key: readability-implicit-bool-conversion.AllowIntegerConditions
+    value: 1
+  - key: readability-implicit-bool-conversion.AllowPointerConditions
+    value: 1
