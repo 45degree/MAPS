@@ -14,6 +14,7 @@ namespace Maps {
 
 template <class Mesh>
 static void OpenMesh2IGL(const Mesh *mesh, Eigen::MatrixX3d &V, Eigen::MatrixX3i &F) {
+
     assert(mesh->is_trimesh());
 
     auto verticesCount = std::distance(mesh->vertices_sbegin(), mesh->vertices_end());
@@ -44,6 +45,7 @@ static void OpenMesh2IGL(const Mesh *mesh, Eigen::MatrixX3d &V, Eigen::MatrixX3i
 }
 
 bool MapMesh::IsInTriangle(const Point2D &point, const std::array<Point2D, 3> &triangle2D) {
+
     Point point0(point[0], point[1], 0);
     Point point1(triangle2D[0][0], triangle2D[0][1], 0);
     Point point2(triangle2D[1][0], triangle2D[1][1], 0);
@@ -56,6 +58,33 @@ bool MapMesh::IsInTriangle(const Point2D &point, const std::array<Point2D, 3> &t
     if ((z1 >= 0 && z2 >= 0 && z3 >= 0) || (z1 <= 0 && z2 <= 0 && z3 <= 0)) return true;
 
     return false;
+}
+
+bool MapMesh::IsInTriangle(const Point &point, const std::array<Point, 3> &triangle) {
+    if (!IsCoplanar(point, triangle)) return false;
+
+    double z1 = (point - triangle[0]).cross(triangle[1] - triangle[0])[2];
+    double z2 = (point - triangle[1]).cross(triangle[2] - triangle[1])[2];
+    double z3 = (point - triangle[2]).cross(triangle[0] - triangle[2])[2];
+
+    if ((z1 >= 0 && z2 >= 0 && z3 >= 0) || (z1 <= 0 && z2 <= 0 && z3 <= 0)) return true;
+
+    return false;
+}
+
+bool MapMesh::IsCoplanar(const Point &point, const std::array<Point, 3> &triangle) {
+    double esp = 1e-5;
+    auto Vec1 = triangle[0] - point;
+    auto Vec2 = triangle[1] - point;
+    auto Vec3 = triangle[2] - point;
+
+    Eigen::Matrix3d mat;
+    mat(0, 0) = Vec1[0], mat(0, 1) = Vec1[1], mat(0, 2) = Vec1[2];
+    mat(1, 0) = Vec2[0], mat(1, 1) = Vec2[1], mat(1, 2) = Vec2[2];
+    mat(2, 0) = Vec2[0], mat(2, 1) = Vec3[1], mat(2, 2) = Vec3[2];
+
+    double result = mat.determinant();
+    return result >= -esp && result <= esp;
 }
 
 std::tuple<double, double, double> MapMesh::CalculateBaryCoor(
@@ -73,11 +102,26 @@ std::tuple<double, double, double> MapMesh::CalculateBaryCoor(
     return {alpha, beta, gamma};
 }
 
+std::tuple<double, double, double> MapMesh::CalculateBaryCoor(
+    const Point &point, const std::array<Point, 3> &triangle) {
+    Eigen::Matrix3d A;
+    // clang-format off
+    A << triangle[0][0], triangle[0][1], triangle[0][2],
+         triangle[1][0], triangle[1][1], triangle[1][2],
+         triangle[2][0], triangle[2][1], triangle[2][2];
+    // clang-format on
+    Eigen::Vector3d B(point[0], point[1], point[2]);
+    Eigen::Vector3d result = A.ldlt().solve(B);
+
+    return {result[0], result[1], result[2]};
+}
+
 // TODO(45degree): 移除重心坐标计算
 // TODO(45degree): 重新设计借口
 int MapMesh::CDTTrangle(const Coordinate2Dpair &coordinates,
                         std::vector<std::array<VertexHandle, 3>> &faces,
                         BarycentricCoordinates &barycentricCoordinates) {
+
     faces.clear();
 
     std::vector<p2t::Point *> points(coordinates.size());
@@ -236,6 +280,7 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
         newFaces.clear();
         trangleIdx = MVTTrangle(coordinates, i, newFaces, barycentricCoordinates);
         if (TryToAddFace(newFaces, facesHandle)) {
+
             // TOOD(45degree): 判断被删除的点在那个三角形内部, 并计算重心坐标
 
             data(facesHandle[trangleIdx]).vertrices.push_back(deleteVertex);
@@ -290,6 +335,11 @@ void MapMesh::Initialize() {
 
     for (auto vertexIter = vertices_sbegin(); vertexIter != vertices_end(); vertexIter++) {
         data(*vertexIter).canBeDeleted = true;
+    }
+
+    originFaces = std::vector<FaceHandle>(faces_sbegin(), faces_end());
+    for (const auto &face : originFaces) {
+        originFaceVertices[face] = std::vector<VertexHandle>(fv_begin(face), fv_end(face));
     }
 
     CalculateCurvature();
@@ -377,6 +427,23 @@ double MapMesh::CalculateAngle(VertexHandle vertexHandle, FaceHandle face) {
     return std::acos(Vec1.normalized().dot(Vec2.normalized()));
 }
 
+void MapMesh::MapFaceFromOriginMesh(const FaceHandle &face, std::array<Point, 3> &mapFace) {
+    const std::vector<VertexHandle> &vertices = originFaceVertices[face];
+    assert(vertices.size() == 3);
+    for (int i = 0; i < 3; i++) {
+        auto vertexHandle = vertices[i];
+        if (!IsVertexDeleted(vertexHandle)) {
+            mapFace[i] = point(vertexHandle);
+            continue;
+        }
+
+        auto baryCoor = data(vertexHandle).barycentricCoordinates.value();
+        mapFace[i] = point(baryCoor[0].first) * baryCoor[0].second +
+                     point(baryCoor[1].first) * baryCoor[1].second +
+                     point(baryCoor[2].first) * baryCoor[2].second;
+    }
+}
+
 void MapMesh::FaceSubDivision() {
     std::vector<FaceHandle> originFaceHandle(faces_sbegin(), faces_end());
 
@@ -386,7 +453,9 @@ void MapMesh::FaceSubDivision() {
 
         for (int i = 0, ii = 1; i < 3; i++, ii++, ii %= 3) {
             auto newPoint = (point(vertices[i]) + point(vertices[ii])) / 2.0;
-            vertices.push_back(add_vertex(newPoint));
+            auto newPointHandle = add_vertex(newPoint);
+            data(newPointHandle).isNew = true;
+            vertices.push_back(newPointHandle);
         }
         delete_face(faceHandle);
         add_face({vertices[0], vertices[3], vertices[5]});
@@ -416,37 +485,28 @@ void MapMesh::DownSampling() {
     }
 }
 
-// TODO(45degree): 错误代码
-void MapMesh::UpdateBarycentricCoordinates() {
-    /* std::function<BarycentricCoordinates(VertexHandle &)> DFS_updataBarycentricCoordinates = */
-    /*     [&](VertexHandle &vertexHandle) { */
-    /*     data(vertexHandle).isTranversed = true; */
-    /*     auto barycentricCoordinates = data(vertexHandle).barycentricCoordinates.value(); */
-    /*     for (auto &barycentricCoordinate : barycentricCoordinates) { */
-    /*         if (IsVertexDeleted(barycentricCoordinate.first)) { */
-    /*             if (!data(barycentricCoordinate.first).isTranversed) { */
-    /*                 data(vertexHandle).barycentricCoordinates = */
-    /*                     DFS_updataBarycentricCoordinates(barycentricCoordinate.first); */
-    /*             } */
-    /*             return data(vertexHandle).barycentricCoordinates.value(); */
-    /*         } */
-    /*     } */
+void MapMesh::Remesh() {
 
-    /*     return data(vertexHandle).barycentricCoordinates.value(); */
-    /* }; */
+    for (const auto &vertex : vertices()) {
+        if (!data(vertex).isNew) continue;
 
-    /* for (auto vertexIter = vertices_begin(); vertexIter != vertices_end(); vertexIter++) { */
-    /*     data(*vertexIter).isTranversed = true; */
-    /*     if (IsVertexDeleted(*vertexIter)) { */
-    /*         auto vertex = static_cast<VertexHandle>(*vertexIter); */
-    /*         DFS_updataBarycentricCoordinates(vertex); */
-    /*     } */
-    /* } */
+        for (const auto &face : originFaces) {
+            std::array<Point, 3> mapFace;
+            const std::vector<VertexHandle> &fv = originFaceVertices[face];
+            MapFaceFromOriginMesh(face, mapFace);
+            if (IsInTriangle(point(vertex), mapFace)) {
+                auto [alpha, beta, gamma] = CalculateBaryCoor(point(vertex), mapFace);
+                Point newPoint = alpha * point(fv[0]) + beta * point(fv[1]) + gamma * point(fv[2]);
+                point(vertex) = newPoint;
+            }
+        }
+    }
 }
 
 std::optional<std::tuple<int, double, double, double>> MapMesh::UpdateParam(
     const std::vector<std::array<VertexHandle, 3>> &faces,
     const std::map<VertexHandle, Point2D> &point2DMap, const Point2D &point) {
+
     for (int i = 0; i < faces.size(); i++) {
         const auto &face = faces[i];
         std::array<Point2D, 3> triangle;

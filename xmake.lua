@@ -1,3 +1,5 @@
+---@diagnostic disable: undefined-global, undefined-field
+
 add_rules("mode.debug", "mode.release")
 add_requires("openmesh", {debug = true})
 add_requires("libigl")

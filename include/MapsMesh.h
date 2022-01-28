@@ -24,8 +24,8 @@ struct MapTrait : public OpenMesh::DefaultTraits {
         bool canBeDeleted = false;  // 是否能够被删除
         double weight;              // 权重
         double ringArea;            // 1领域三角面片的面积之和
-        double isDeleted = false;   // 是否已经被删除
         bool isTranversed = false;  // 在更新重心坐标时是否被遍历过
+        bool isNew = false;         // 是否是细分出来的点
         std::optional<BarycentricCoordinates> barycentricCoordinates;  // 重心坐标
     };
 };
@@ -121,11 +121,6 @@ class MapMesh : public BaseMesh {
     void FaceSubDivision();
 
     /**
-     * @brief 更新重心坐标
-     */
-    void UpdateBarycentricCoordinates();
-
-    /**
      * @brief 判断顶点是否被删除
      */
     [[nodiscard]] bool IsVertexDeleted(const MapMesh::VertexHandle& vertexHandle) const {
@@ -142,6 +137,14 @@ class MapMesh : public BaseMesh {
      */
     std::optional<Point2D> ReCalculate2DCoordinates(
         std::map<VertexHandle, Point2D>& originCoordinates, VertexHandle deleteVertex);
+
+    /**
+     * @brief 将原始网格中的一个面映射到现网格中
+     *
+     * @param[in] face
+     * @param[out] mapFace
+     */
+    void MapFaceFromOriginMesh(const FaceHandle& face, std::array<Point, 3>& mapFace);
 
     /** TODO(45degree): 需要重新实现
      * @brief CDT三角化
@@ -172,11 +175,52 @@ class MapMesh : public BaseMesh {
                           std::vector<std::array<VertexHandle, 3>>& faces,
                           BarycentricCoordinates& barycentricCoordinates);
 
+    /**
+     * @brief 判断2维点是否在三角形内部
+     */
     static bool IsInTriangle(const Point2D& point, const std::array<Point2D, 3>& triangle2D);
 
+    /**
+     * @brief 判断3维点是否在三角形内部(如果4点不共面，也不算在内部)
+     */
+    static bool IsInTriangle(const Point& point, const std::array<Point, 3>& triangle);
+
+    /**
+     * @brief 判断点是否和三角形在同一平面上
+     */
+    static bool IsCoplanar(const Point& point, const std::array<Point, 3>& triangle);
+
+    /**
+     * @brief 在二维平面上计算重心坐标
+     *
+     * @param point
+     * @param triangle2D
+     *
+     * @return
+     */
     static std::tuple<double, double, double> CalculateBaryCoor(
         const Point2D& point, const std::array<Point2D, 3>& triangle2D);
 
+    /**
+     * @brief 在三维平面上计算重心坐标
+     *
+     * @param point
+     * @param triangle
+     *
+     * @return
+     */
+    static std::tuple<double, double, double> CalculateBaryCoor(
+        const Point& point, const std::array<Point, 3>& triangle);
+
+    /**
+     * @brief 重新计算某一点的参数
+     *
+     * @param faces
+     * @param point2DMap
+     * @param point
+     *
+     * @return
+     */
     static std::optional<std::tuple<int, double, double, double>> UpdateParam(
         const std::vector<std::array<VertexHandle, 3>>& faces,
         const std::map<VertexHandle, Point2D>& point2DMap, const Point2D& point);
@@ -184,6 +228,8 @@ class MapMesh : public BaseMesh {
    private:
     double maxRingArea;
     double maxCurvature;
+    std::vector<FaceHandle> originFaces;  // 原始网格中所有的面
+    std::map<FaceHandle, std::vector<VertexHandle>> originFaceVertices;
     std::priority_queue<VertexHandle, std::vector<VertexHandle>, CompareFun> curvatureQueue;
 };
 }  // namespace Maps
