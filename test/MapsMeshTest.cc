@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <OpenMesh/Core/IO/MeshIO.hh>
 #include <cstdio>
 
 #define private public
@@ -24,29 +25,29 @@ class MapsMeshTest : public ::testing::Test {
         vertices[7] = mesh.add_vertex(Maps::MapMesh::Point(-1, 1, -1));
 
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[0], vertices[3], vertices[1]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[3], vertices[0], vertices[1]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[1], vertices[3], vertices[2]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[3], vertices[1], vertices[2]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[1], vertices[2], vertices[6]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[2], vertices[1], vertices[6]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[1], vertices[6], vertices[5]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[6], vertices[1], vertices[5]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[3], vertices[6], vertices[2]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[6], vertices[3], vertices[2]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[3], vertices[7], vertices[6]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[7], vertices[3], vertices[6]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[0], vertices[1], vertices[4]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[1], vertices[0], vertices[4]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[4], vertices[1], vertices[5]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[1], vertices[4], vertices[5]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[0], vertices[7], vertices[3]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[7], vertices[0], vertices[3]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[7], vertices[0], vertices[4]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[0], vertices[7], vertices[4]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[7], vertices[4], vertices[5]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[4], vertices[7], vertices[5]}));
         mesh.add_face(
-            std::vector<Maps::MapMesh::VertexHandle>({vertices[6], vertices[7], vertices[5]}));
+            std::vector<Maps::MapMesh::VertexHandle>({vertices[7], vertices[6], vertices[5]}));
     }
 
    protected:
@@ -159,64 +160,6 @@ TEST_F(MapsMeshTest, ReCalculate2DCoordinates) {  // NOLINT
     ASSERT_FLOAT_EQ(1.0 / 4, result[1]);
 }
 
-TEST_F(MapsMeshTest, IsInTriangle2D) {  // NOLINT
-    using Point2D = Maps::MapMesh::Point2D;
-    std::array<Point2D, 3> triangle;
-    triangle[0] = Point2D(0, 1);
-    triangle[1] = Point2D(-1, -1);
-    triangle[2] = Point2D(1, -1);
-    ASSERT_TRUE(Maps::MapMesh::IsInTriangle(Point2D(0, 0), triangle));
-    ASSERT_FALSE(Maps::MapMesh::IsInTriangle(Point2D(1, 0), triangle));
-    ASSERT_FALSE(Maps::MapMesh::IsInTriangle(Point2D(-1, 0), triangle));
-}
-
-TEST_F(MapsMeshTest, IsInTriangle3D) {  // NOLINT
-    using Point = Maps::MapMesh::Point;
-    Point point1(1, 0, 0);
-    Point point2(0, 1, 0);
-    Point point3(0, 0, 1);
-    Point point0(1.0 / 3, 1.0 / 3, 1.0 / 3);
-
-    ASSERT_TRUE(Maps::MapMesh::IsInTriangle(point0, {point1, point2, point3}));
-}
-
-TEST_F(MapsMeshTest, IsCoplanar) {  // NOLINT
-    using Point = Maps::MapMesh::Point;
-    Point point1(1, 0, 0);
-    Point point2(0, 1, 0);
-    Point point3(0, 0, 1);
-    Point point0(1.0 / 3, 1.0 / 3, 1.0 / 3);
-
-    ASSERT_TRUE(Maps::MapMesh::IsCoplanar(point0, {point1, point2, point3}));
-}
-
-TEST_F(MapsMeshTest, CalculateBaryCoor2D) {  // NOLINT
-    using Point2D = Maps::MapMesh::Point2D;
-
-    Point2D point0(0, 1.0 / 2);
-    Point2D point1(-1, 0);
-    Point2D point2(1, 0);
-    Point2D point3(0, 1);
-
-    auto [alpha, beta, gamma] = Maps::MapMesh::CalculateBaryCoor(point0, {point1, point2, point3});
-    ASSERT_FLOAT_EQ(alpha, 1.0 / 4);
-    ASSERT_FLOAT_EQ(beta, 1.0 / 4);
-    ASSERT_FLOAT_EQ(gamma, 1.0 / 2);
-}
-
-TEST_F(MapsMeshTest, CalculateBaryCoor3D) {  // NOLINT
-    using Point = Maps::MapMesh::Point;
-
-    Point point1(1, 0, 0);
-    Point point2(0, 1, 0);
-    Point point3(0, 0, 1);
-    Point point0(1.0 / 3, 1.0 / 3, 1.0 / 3);
-    auto [alpha, beta, gamma] = Maps::MapMesh::CalculateBaryCoor(point0, {point1, point2, point3});
-    ASSERT_FLOAT_EQ(alpha, 1.0 / 3);
-    ASSERT_FLOAT_EQ(beta, 1.0 / 3);
-    ASSERT_FLOAT_EQ(gamma, 1.0 / 3);
-}
-
 TEST_F(MapsMeshTest, TEST1) {  // NOLINT
     mesh.Initialize();
     mesh.DownSampling();
@@ -251,9 +194,10 @@ TEST_F(MapsMeshTest, TEST1) {  // NOLINT
     }
 }
 
-TEST_F(MapsMeshTest, TEST2) {
+TEST_F(MapsMeshTest, TEST2) {  // NOLINT
     mesh.Initialize();
     mesh.DownSampling();
+    mesh.FaceSubDivision();
     mesh.FaceSubDivision();
     mesh.Remesh();
 

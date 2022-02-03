@@ -1,16 +1,16 @@
 #include "MapsMesh.h"
 
-#include <igl/principal_curvature.h>
+#include <igl/gaussian_curvature.h>
 #include <poly2tri.h>
+#include <tbb/tbb.h>
 
 #include <Eigen/Dense>
+#include <algorithm>
 #include <limits>
 
-namespace Maps {
+#include "tqdm.h"
 
-// TODO(45degree): 建立一个函数 判断点是否在三角形内
-// TODO(45degree): 建立一个函数 计算重心坐标
-// TODO(45degree): 建立一个函数 根据重心坐标还原坐标
+namespace Maps {
 
 template <class Mesh>
 static void OpenMesh2IGL(const Mesh *mesh, Eigen::MatrixX3d &V, Eigen::MatrixX3i &F) {
@@ -44,80 +44,17 @@ static void OpenMesh2IGL(const Mesh *mesh, Eigen::MatrixX3d &V, Eigen::MatrixX3i
     }
 }
 
-bool MapMesh::IsInTriangle(const Point2D &point, const std::array<Point2D, 3> &triangle2D) {
+void MapMesh::ReadMeshFromLibigl(const Eigen::MatrixX3d &V, const Eigen::MatrixX3i &F) {
+    std::vector<VertexHandle> vertexHandle(V.rows());
+    for (int i = 0; i < V.rows(); i++) {
+        vertexHandle[i] = add_vertex(Point(V(i, 0), V(i, 1), V(i, 2)));
+    }
 
-    Point point0(point[0], point[1], 0);
-    Point point1(triangle2D[0][0], triangle2D[0][1], 0);
-    Point point2(triangle2D[1][0], triangle2D[1][1], 0);
-    Point point3(triangle2D[2][0], triangle2D[2][1], 0);
-
-    double z1 = (point0 - point1).cross(point2 - point1)[2];
-    double z2 = (point0 - point2).cross(point3 - point2)[2];
-    double z3 = (point0 - point3).cross(point1 - point3)[2];
-
-    if ((z1 >= 0 && z2 >= 0 && z3 >= 0) || (z1 <= 0 && z2 <= 0 && z3 <= 0)) return true;
-
-    return false;
+    for (int i = 0; i < F.rows(); i++) {
+        add_face({vertexHandle[F(i, 0)], vertexHandle[F(i, 1)], vertexHandle[F(i, 2)]});
+    }
 }
 
-bool MapMesh::IsInTriangle(const Point &point, const std::array<Point, 3> &triangle) {
-    if (!IsCoplanar(point, triangle)) return false;
-
-    double z1 = (point - triangle[0]).cross(triangle[1] - triangle[0])[2];
-    double z2 = (point - triangle[1]).cross(triangle[2] - triangle[1])[2];
-    double z3 = (point - triangle[2]).cross(triangle[0] - triangle[2])[2];
-
-    if ((z1 >= 0 && z2 >= 0 && z3 >= 0) || (z1 <= 0 && z2 <= 0 && z3 <= 0)) return true;
-
-    return false;
-}
-
-bool MapMesh::IsCoplanar(const Point &point, const std::array<Point, 3> &triangle) {
-    double esp = 1e-5;
-    auto Vec1 = triangle[0] - point;
-    auto Vec2 = triangle[1] - point;
-    auto Vec3 = triangle[2] - point;
-
-    Eigen::Matrix3d mat;
-    mat(0, 0) = Vec1[0], mat(0, 1) = Vec1[1], mat(0, 2) = Vec1[2];
-    mat(1, 0) = Vec2[0], mat(1, 1) = Vec2[1], mat(1, 2) = Vec2[2];
-    mat(2, 0) = Vec2[0], mat(2, 1) = Vec3[1], mat(2, 2) = Vec3[2];
-
-    double result = mat.determinant();
-    return result >= -esp && result <= esp;
-}
-
-std::tuple<double, double, double> MapMesh::CalculateBaryCoor(
-    const MapMesh::Point2D &point, const std::array<MapMesh::Point2D, 3> &triangle2D) {
-    Point point0 = Point(point[0], point[1], 0);
-    Point point1 = Point(triangle2D[0][0], triangle2D[0][1], 0);
-    Point point2 = Point(triangle2D[1][0], triangle2D[1][1], 0);
-    Point point3 = Point(triangle2D[2][0], triangle2D[2][1], 0);
-
-    double area = (point2 - point1).cross(point3 - point1).norm();
-    double alpha = (point0 - point2).cross(point0 - point3).norm() / area;
-    double beta = (point0 - point1).cross(point0 - point3).norm() / area;
-    double gamma = (point0 - point1).cross(point0 - point2).norm() / area;
-
-    return {alpha, beta, gamma};
-}
-
-std::tuple<double, double, double> MapMesh::CalculateBaryCoor(
-    const Point &point, const std::array<Point, 3> &triangle) {
-    Eigen::Matrix3d A;
-    // clang-format off
-    A << triangle[0][0], triangle[0][1], triangle[0][2],
-         triangle[1][0], triangle[1][1], triangle[1][2],
-         triangle[2][0], triangle[2][1], triangle[2][2];
-    // clang-format on
-    Eigen::Vector3d B(point[0], point[1], point[2]);
-    Eigen::Vector3d result = A.ldlt().solve(B);
-
-    return {result[0], result[1], result[2]};
-}
-
-// TODO(45degree): 移除重心坐标计算
-// TODO(45degree): 重新设计借口
 int MapMesh::CDTTrangle(const Coordinate2Dpair &coordinates,
                         std::vector<std::array<VertexHandle, 3>> &faces,
                         BarycentricCoordinates &barycentricCoordinates) {
@@ -143,7 +80,6 @@ int MapMesh::CDTTrangle(const Coordinate2Dpair &coordinates,
 
     auto triangles = cdt.GetTriangles();
     if (!p2t::IsDelaunay(triangles)) {
-        std::cout << "can't delaunay triangles" << std::endl;
         return -1;
     }
 
@@ -212,7 +148,7 @@ int MapMesh::MVTTrangle(const Coordinate2Dpair &coordinates, int startIdx,
         barycentricCoordinates[1] = std::make_pair(coordinates[i].first, beta);
         barycentricCoordinates[2] = std::make_pair(coordinates[ii].first, gamma);
 
-        trangleIdx = static_cast<int>(i);
+        trangleIdx = static_cast<int>(faces.size() - 1);
     }
     return trangleIdx;
 }
@@ -228,7 +164,7 @@ std::optional<MapMesh::Point2D> MapMesh::ReCalculate2DCoordinates(
 }
 
 void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
-    // TODO(45degree): 记录1领域面中所有包含的点, 并更新这些点的参数
+    // 记录1领域面中所有包含的点, 并更新这些点的参数
     // 假设1领域面f上记录了一个点v, v中记录了v在f上的重心坐标(a, b, c), 面f在经过2维映射变成了f'
     // 更新过程: 1. 根据f'和(a, b, c)计算v的二维映射点v'
     //           2. 重新计算包含v'的三角形p‘, 并根据p’重新计算坐标(a', b', c')
@@ -249,18 +185,18 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
         }
     }
 
-    delete_vertex(deleteVertex);
+    delete_vertex(deleteVertex, false);
 
     BarycentricCoordinates barycentricCoordinates;
     std::vector<std::array<VertexHandle, 3>> newFaces;
 
     int trangleIdx = CDTTrangle(coordinates, newFaces, barycentricCoordinates);
     std::vector<FaceHandle> facesHandle;
-    if (trangleIdx != -1 && TryToAddFace(newFaces, facesHandle)) {
+    if (trangleIdx != -1 && TryToAddFaces(std::move(newFaces), facesHandle)) {
         data(facesHandle[trangleIdx]).vertrices.push_back(deleteVertex);
         data(deleteVertex).barycentricCoordinates = barycentricCoordinates;
 
-        // TOOD(45degree): 判断被删除的点在那个三角形内部, 并计算重心坐标
+        // 判断被删除的点在那个三角形内部, 并计算重心坐标
 
         for (auto &[vertex, point2D] : deletePoint2DMap) {
             auto newParma = UpdateParam(newFaces, currentPoint2DMap, point2D);
@@ -274,14 +210,15 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
             baryCoor[2].first = newFaces[idx][2], baryCoor[2].second = gamma;
             data(vertex).barycentricCoordinates = baryCoor;
         }
+
+        // TODO(45degree): 将原网格中的1领域面重新切分
+
         return;
     }
     for (int i = 0; i < coordinates.size(); i++) {
         newFaces.clear();
         trangleIdx = MVTTrangle(coordinates, i, newFaces, barycentricCoordinates);
-        if (TryToAddFace(newFaces, facesHandle)) {
-
-            // TOOD(45degree): 判断被删除的点在那个三角形内部, 并计算重心坐标
+        if (TryToAddFaces(std::move(newFaces), facesHandle)) {
 
             data(facesHandle[trangleIdx]).vertrices.push_back(deleteVertex);
             data(deleteVertex).barycentricCoordinates = barycentricCoordinates;
@@ -304,64 +241,27 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
     throw std::runtime_error("can't add face");
 }
 
-bool MapMesh::TryToAddFace(std::vector<std::array<VertexHandle, 3>> &faces,
-                           std::vector<FaceHandle> &addedFaces) {
-    addedFaces.clear();
-    for (auto &face : faces) {
-        for (int i = 0, ii = 1; i < 3; i++, ii++, ii %= 3) {
-            auto half_edge = find_halfedge(face[i], face[ii]);
-            if (half_edge.is_valid() && !is_boundary(half_edge)) {
-                std::swap(face[1], face[2]);
-                break;
-            }
-        }
-        auto faceHandle = add_face(std::vector<VertexHandle>(face.begin(), face.end()));
-        if (faceHandle.is_valid()) {
-            addedFaces.push_back(faceHandle);
-        } else {
-            for (auto &addedFace : addedFaces) {
-                delete_face(addedFace);
-            }
-            return false;
-        }
-    }
-    return true;
-}
-
 void MapMesh::Initialize() {
-    request_face_status();
-    request_vertex_status();
-    request_edge_status();
-
-    for (auto vertexIter = vertices_sbegin(); vertexIter != vertices_end(); vertexIter++) {
-        data(*vertexIter).canBeDeleted = true;
-    }
-
     originFaces = std::vector<FaceHandle>(faces_sbegin(), faces_end());
     for (const auto &face : originFaces) {
         originFaceVertices[face] = std::vector<VertexHandle>(fv_begin(face), fv_end(face));
     }
-
-    CalculateCurvature();
-    CalculateArea();
-    CalculateWeight(0.5);
 }
 
 void MapMesh::CalculateCurvature() {
-    Eigen::MatrixX3d V, PD1, PD2;
+    Eigen::MatrixX3d V;
     Eigen::MatrixX3i F;
-    Eigen::VectorXd PV1, PV2, PV;
+    Eigen::VectorXd K;
 
     OpenMesh2IGL(this, V, F);
-    igl::principal_curvature(V, F, PD1, PD2, PV1, PV2);
-    PV = PV1 + PV2;
+    igl::gaussian_curvature(V, F, K);
 
     int j = 0;
     maxCurvature = std::numeric_limits<double>::min();
     for (auto i = vertices_sbegin(); i != vertices_end(); i++, j++) {
-        data(*i).curvature = PV[j];
-        if (PV[j] > maxCurvature) {
-            maxCurvature = PV[j];
+        data(*i).curvature = K[j];
+        if (K[j] > maxCurvature) {
+            maxCurvature = K[j];
         }
     }
 }
@@ -378,14 +278,10 @@ void MapMesh::CalculateWeight(double lambda) {
     }
 }
 
-void MapMesh::CalculateArea() {
+void MapMesh::CalculateAreas() {
     maxRingArea = std::numeric_limits<double>::min();
     for (auto faceIter = faces_sbegin(); faceIter != faces_end(); faceIter++) {
-        std::vector<VertexHandle> vertices(fv_begin(*faceIter), fv_end(*faceIter));
-        assert(vertices.size() == 3);
-        auto Vec1 = point(vertices[1]) - point(vertices[0]);
-        auto Vec2 = point(vertices[2]) - point(vertices[0]);
-        double area = 0.5 * Vec1.cross(Vec2).norm();
+        double area = CalculateArea(*faceIter);
         data(*faceIter).area = area;
     }
 
@@ -399,32 +295,6 @@ void MapMesh::CalculateArea() {
         }
         data(*vertexIter).ringArea = ringArea;
     }
-}
-
-double MapMesh::CalculateAngle(VertexHandle vertexHandle, FaceHandle face) {
-    auto point1 = point(vertexHandle);
-    Eigen::Vector3d vertex;
-    vertex[0] = point1[0];
-    vertex[1] = point1[1];
-    vertex[2] = point1[2];
-
-    std::vector<Eigen::Vector3d> points;
-    for (auto _pointIter = fv_begin(face); _pointIter != fv_end(face); _pointIter++) {
-        if (*_pointIter != vertexHandle) {
-            auto _point = point(*_pointIter);
-            Eigen::Vector3d p;
-            p[0] = _point[0];
-            p[1] = _point[1];
-            p[2] = _point[2];
-            points.emplace_back(p);
-        }
-    }
-    assert(points.size() == 2);
-
-    auto Vec1 = points[0] - vertex;
-    auto Vec2 = points[1] - vertex;
-
-    return std::acos(Vec1.normalized().dot(Vec2.normalized()));
 }
 
 void MapMesh::MapFaceFromOriginMesh(const FaceHandle &face, std::array<Point, 3> &mapFace) {
@@ -466,6 +336,17 @@ void MapMesh::FaceSubDivision() {
 }
 
 void MapMesh::DownSampling() {
+    request_face_status();
+    request_vertex_status();
+    request_edge_status();
+
+    for (auto vertexIter = vertices_sbegin(); vertexIter != vertices_end(); vertexIter++) {
+        data(*vertexIter).canBeDeleted = true;
+    }
+
+    CalculateCurvature();
+    CalculateAreas();
+    CalculateWeight(0.5);
     while (!curvatureQueue.empty()) {
         auto vertexHandle = curvatureQueue.top();
         curvatureQueue.pop();
@@ -476,19 +357,51 @@ void MapMesh::DownSampling() {
             data(*ringVertex).canBeDeleted = false;
         }
 
-        // 计算2维坐标
-        Coordinate2Dpair coordinates;
-        std::vector<std::vector<VertexHandle>> faces;
-        Calculate2D(vertexHandle, coordinates);
-
         ReTrangleAndAddFace(vertexHandle);
     }
 }
 
 void MapMesh::Remesh() {
 
+    tqdm bar;
+    int N = static_cast<int>(std::distance(vertices_begin(), vertices_end()));
+
+    int i = 0;
+    std::mutex _mutex;
+    /* oneapi::tbb::parallel_for_each(vertices_sbegin(), vertices_end(), */
+    /*                                [&](const VertexHandle &vertex) { */
+    /*     if (!data(vertex).isNew) { */
+    /*         _mutex.lock(); */
+    /*         i++; */
+    /*         bar.progress(i, N); */
+    /*         _mutex.unlock(); */
+    /*         return; */
+    /*     } */
+    /*     oneapi::tbb::parallel_for_each(originFaces.begin(), originFaces.end(), */
+    /*                                    [&](const FaceHandle &face) { */
+    /*         std::array<Point, 3> mapFace; */
+    /*         const std::vector<VertexHandle> &fv = originFaceVertices[face]; */
+    /*         MapFaceFromOriginMesh(face, mapFace); */
+    /*         if (IsInTriangle(point(vertex), mapFace)) { */
+    /*             auto [alpha, beta, gamma] = CalculateBaryCoor(point(vertex), mapFace); */
+    /*             Point newPoint = alpha * point(fv[0]) + beta * point(fv[1]) + gamma *
+     * point(fv[2]); */
+    /*             point(vertex) = newPoint; */
+    /*             return; */
+    /*         } */
+    /*     }); */
+    /*     _mutex.lock(); */
+    /*     i++; */
+    /*     bar.progress(i, N); */
+    /*     _mutex.unlock(); */
+    /* }); */
+
     for (const auto &vertex : vertices()) {
-        if (!data(vertex).isNew) continue;
+        bar.progress(i, N);
+        if (!data(vertex).isNew) {
+            i++;
+            continue;
+        }
 
         for (const auto &face : originFaces) {
             std::array<Point, 3> mapFace;
@@ -498,9 +411,12 @@ void MapMesh::Remesh() {
                 auto [alpha, beta, gamma] = CalculateBaryCoor(point(vertex), mapFace);
                 Point newPoint = alpha * point(fv[0]) + beta * point(fv[1]) + gamma * point(fv[2]);
                 point(vertex) = newPoint;
+                break;
             }
         }
+        i++;
     }
+    bar.finish();
 }
 
 std::optional<std::tuple<int, double, double, double>> MapMesh::UpdateParam(

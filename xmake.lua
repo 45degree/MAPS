@@ -2,7 +2,7 @@
 
 add_rules("mode.debug", "mode.release")
 add_requires("openmesh", {debug = true})
-add_requires("libigl")
+add_requires("libigl", "tbb")
 add_requires("gtest")
 
 target("poly2tri")
@@ -15,10 +15,15 @@ target("Maps")
     set_kind("static")
     set_languages("c99", "c++17")
     add_files("src/*.cc")
-    add_packages("openmesh", "libigl")
+    add_packages("openmesh", "libigl", "tbb")
     add_includedirs("include/", { public = true })
+    add_includedirs("cpptqdm/")
     add_syslinks("pthread")
     add_deps("poly2tri")
+
+    if is_mode("debug") and is_plat("linux") then
+        add_cxflags("-pg")
+    end
 
     on_load(function(target)
         os.cp("$(projectdir)/model", target:targetdir())
@@ -30,7 +35,7 @@ target("MapsTest")
     set_languages("c99", "c++17")
     add_files("test/*.cc")
     add_deps("Maps")
-    add_packages("gtest", "openmesh")
+    add_packages("gtest", "openmesh", "libigl")
 target_end()
 
 target("MapsExample")
@@ -39,6 +44,11 @@ target("MapsExample")
     add_files("example/*.cc")
     add_deps("Maps")
     add_packages("openmesh", "libigl")
+
+    if is_mode("debug") and is_plat("linux") then
+        add_cxflags("-pg")
+    end
+
 target_end()
 
 --
