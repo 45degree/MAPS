@@ -96,7 +96,7 @@ class MapMesh : public BaseMesh<MapTrait> {
      * @param[in]  vertex
      * @param[out] coordinates
      */
-    void Calculate2D(VertexHandle vertex, Coordinate2Dpair& coordinates);
+    void Calculate2D(VertexHandle vertex, Coordinate2DPair& coordinates);
 
     /**
      * @brief 判断顶点是否被删除
@@ -134,7 +134,7 @@ class MapMesh : public BaseMesh<MapTrait> {
      * @return i != -1: 原点存在于三角化后的第i个面中
      *         i == -1: 三角化失败
      */
-    static int CDTTrangle(const Coordinate2Dpair& coordinates,
+    static int CDTTrangle(const Coordinate2DPair& coordinates,
                           std::vector<std::array<VertexHandle, 3>>& faces,
                           BarycentricCoordinates& barycentricCoordinates);
 
@@ -149,7 +149,7 @@ class MapMesh : public BaseMesh<MapTrait> {
      * @return i != -1: 原点存在于三角化后的第i个面中
      *         i == -1: 三角化失败
      */
-    static int MVTTrangle(const Coordinate2Dpair& coordinates, int startIdx,
+    static int MVTTrangle(const Coordinate2DPair& coordinates, int startIdx,
                           std::vector<std::array<VertexHandle, 3>>& faces,
                           BarycentricCoordinates& barycentricCoordinates);
 

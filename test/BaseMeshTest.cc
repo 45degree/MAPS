@@ -172,3 +172,32 @@ TEST_F(BaseMeshTest, CalculateBaryCoor3D) {  // NOLINT
     ASSERT_FLOAT_EQ(beta, 1.0 / 3);
     ASSERT_FLOAT_EQ(gamma, 1.0 / 3);
 }
+
+TEST_F(BaseMeshTest, FindFace) {  // NOLINT
+    auto vertex1 = mesh.vertex_handle(0);
+    auto vertex2 = mesh.vertex_handle(3);
+    auto vertex3 = mesh.vertex_handle(1);
+    auto face = mesh.FindFace({vertex1, vertex2, vertex3});
+    ASSERT_TRUE(face.has_value());
+    ASSERT_EQ(face.value(), mesh.face_handle(0));
+}
+
+TEST_F(BaseMeshTest, FindFaceForPoint) {  // NOLINT
+    auto point0 = mesh.point(mesh.vertex_handle(3));
+    auto point1 = mesh.point(mesh.vertex_handle(0));
+    auto point2 = mesh.point(mesh.vertex_handle(1));
+
+    auto result = mesh.FindFace(point0 * 1.0 / 3 + point1 * 1.0 / 3 + point2 * 1.0 / 3);
+    ASSERT_TRUE(result.has_value());
+    ASSERT_EQ(result.value(), mesh.face_handle(0));
+}
+
+TEST_F(BaseMeshTest, CalculateBaryCoor) {  // NOLINT
+    auto point1 = mesh.point(mesh.vertex_handle(3));
+    auto point2 = mesh.point(mesh.vertex_handle(0));
+    auto point3 = mesh.point(mesh.vertex_handle(1));
+    auto point0 = point1 * 1.0 / 3 + point2 * 1.0 / 3 + point3 * 1.0 / 3;
+
+    auto result = mesh.CalculateBaryCoor(point0, mesh.face_handle(0));
+    ASSERT_FLOAT_EQ(result[0].second, 1.0 / 3);
+}

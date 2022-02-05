@@ -9,7 +9,7 @@
 
 class MapsMeshTest : public ::testing::Test {
    protected:
-    using Coordinate2Dpair = Maps::MapMesh::Coordinate2Dpair;
+    using Coordinate2Dpair = Maps::MapMesh::Coordinate2DPair;
     using VertexHandle = Maps::MapMesh::VertexHandle;
 
    protected:
@@ -195,18 +195,18 @@ TEST_F(MapsMeshTest, TEST1) {  // NOLINT
 }
 
 TEST_F(MapsMeshTest, TEST2) {  // NOLINT
-    mesh.Initialize();
-    mesh.DownSampling();
-    mesh.FaceSubDivision();
-    mesh.FaceSubDivision();
-    mesh.Remesh();
+    /* mesh.Initialize(); */
+    /* mesh.DownSampling(); */
+    /* mesh.FaceSubDivision(); */
+    /* mesh.FaceSubDivision(); */
+    /* mesh.Remesh(); */
 
-    mesh.garbage_collection();
-    try {
-        if (!OpenMesh::IO::write_mesh(mesh, "cube_output.off")) {
-            std::cerr << "Cannot write mesh to file 'output.off'" << std::endl;
-        }
-    } catch (std::exception& x) {
-        std::cerr << x.what() << std::endl;
-    }
+    /* mesh.garbage_collection(); */
+    /* try { */
+    /*     if (!OpenMesh::IO::write_mesh(mesh, "cube_output.off")) { */
+    /*         std::cerr << "Cannot write mesh to file 'output.off'" << std::endl; */
+    /*     } */
+    /* } catch (std::exception& x) { */
+    /*     std::cerr << x.what() << std::endl; */
+    /* } */
 }

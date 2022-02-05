@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
+#include <optional>
 
 namespace Maps {
 
@@ -12,10 +13,12 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
     using VertexHandle = typename OpenMesh::TriMesh_ArrayKernelT<Trait>::VertexHandle;
     using FaceHandle = typename OpenMesh::TriMesh_ArrayKernelT<Trait>::FaceHandle;
     using Point = typename OpenMesh::TriMesh_ArrayKernelT<Trait>::Point;
+    using HalfedgeHandle = typename OpenMesh::TriMesh_ArrayKernelT<Trait>::HalfedgeHandle;
 
    public:
     using Point2D = OpenMesh::VectorT<double, 2>;
-    using Coordinate2Dpair = std::vector<std::pair<VertexHandle, Point2D>>;
+    using Coordinate2DPair = std::vector<std::pair<VertexHandle, Point2D>>;
+    using CoordinatePair = std::vector<std::pair<VertexHandle, Point>>;
     using Triangles = std::vector<std::array<std::pair<VertexHandle, Point2D>, 3>>;
 
    public:
@@ -56,6 +59,30 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
      */
     bool TryToAddFaces(std::vector<std::array<VertexHandle, 3>>&& faces,
                        std::vector<FaceHandle>& facesHandle);
+
+    std::optional<FaceHandle> FindFace(const std::array<VertexHandle, 3>& faceVertices) const {
+        auto half_edge = this->find_halfedge(faceVertices[0], faceVertices[1]);
+        if (half_edge.next().to() == faceVertices[2]) {
+            return half_edge.face();
+        } else if (half_edge.opp().next().to() == faceVertices[2]) {
+            return half_edge.opp().face();
+        }
+        return std::nullopt;
+    }
+
+    std::optional<FaceHandle> FindFace(const Point& point) {
+        for (const auto& face : this->faces()) {
+            std::vector<VertexHandle> triangle(this->fv_begin(face), this->fv_end(face));
+            if (IsInTriangle(point, {this->point(triangle[0]), this->point(triangle[1]),
+                                     this->point(triangle[2])})) {
+                return face;
+            }
+        }
+        return std::nullopt;
+    }
+
+    std::vector<std::pair<VertexHandle, double>> CalculateBaryCoor(const Point& point,
+                                                                   const FaceHandle& face);
 
     /**
      * @brief 判断2维点是否在三角形内部
@@ -246,6 +273,23 @@ std::tuple<double, double, double> BaseMesh<T>::CalculateBaryCoor(
     double area3 = (triangle[1] - point).cross(triangle[0] - point).norm();
 
     return {area1 / area, area2 / area, area3 / area};
+}
+
+template <typename T>
+std::vector<std::pair<typename BaseMesh<T>::VertexHandle, double>> BaseMesh<T>::CalculateBaryCoor(
+    const Point& point, const FaceHandle& face) {
+
+    std::array<Point, 3> triangle;
+    std::array<VertexHandle, 3> vertexHandle;
+    auto vertexIter = this->fv_begin(face);
+    for (int i = 0; i < 3; i++, vertexIter++) {
+        triangle[i] = this->point(*vertexIter);
+        vertexHandle[i] = *vertexIter;
+    }
+
+    auto [alpha, beta, gamma] = CalculateBaryCoor(point, triangle);
+
+    return {{vertexHandle[0], alpha}, {vertexHandle[1], beta}, {vertexHandle[2], gamma}};
 }
 
 }  // namespace Maps

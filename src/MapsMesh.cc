@@ -55,7 +55,7 @@ void MapMesh::ReadMeshFromLibigl(const Eigen::MatrixX3d &V, const Eigen::MatrixX
     }
 }
 
-int MapMesh::CDTTrangle(const Coordinate2Dpair &coordinates,
+int MapMesh::CDTTrangle(const Coordinate2DPair &coordinates,
                         std::vector<std::array<VertexHandle, 3>> &faces,
                         BarycentricCoordinates &barycentricCoordinates) {
 
@@ -119,7 +119,7 @@ int MapMesh::CDTTrangle(const Coordinate2Dpair &coordinates,
     return trangleIdx;
 }
 
-int MapMesh::MVTTrangle(const Coordinate2Dpair &coordinates, int startIdx,
+int MapMesh::MVTTrangle(const Coordinate2DPair &coordinates, int startIdx,
                         std::vector<std::array<VertexHandle, 3>> &faces,
                         BarycentricCoordinates &barycentricCoordinates) {
     faces.clear();
@@ -171,7 +171,7 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
     //           3. 删除f, 添加面p, 更新v的重心坐标, 建立p与v的关联
 
     std::vector<FaceHandle> ringFaces(vf_begin(deleteVertex), vf_end(deleteVertex));
-    Coordinate2Dpair coordinates;
+    Coordinate2DPair coordinates;
     Calculate2D(deleteVertex, coordinates);
 
     // 重新计算1领域面上所有包含的点的二维坐标
@@ -210,8 +210,6 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
             baryCoor[2].first = newFaces[idx][2], baryCoor[2].second = gamma;
             data(vertex).barycentricCoordinates = baryCoor;
         }
-
-        // TODO(45degree): 将原网格中的1领域面重新切分
 
         return;
     }
@@ -368,54 +366,99 @@ void MapMesh::Remesh() {
 
     int i = 0;
     std::mutex _mutex;
-    /* oneapi::tbb::parallel_for_each(vertices_sbegin(), vertices_end(), */
-    /*                                [&](const VertexHandle &vertex) { */
-    /*     if (!data(vertex).isNew) { */
-    /*         _mutex.lock(); */
-    /*         i++; */
-    /*         bar.progress(i, N); */
-    /*         _mutex.unlock(); */
-    /*         return; */
-    /*     } */
-    /*     oneapi::tbb::parallel_for_each(originFaces.begin(), originFaces.end(), */
-    /*                                    [&](const FaceHandle &face) { */
-    /*         std::array<Point, 3> mapFace; */
-    /*         const std::vector<VertexHandle> &fv = originFaceVertices[face]; */
-    /*         MapFaceFromOriginMesh(face, mapFace); */
-    /*         if (IsInTriangle(point(vertex), mapFace)) { */
-    /*             auto [alpha, beta, gamma] = CalculateBaryCoor(point(vertex), mapFace); */
-    /*             Point newPoint = alpha * point(fv[0]) + beta * point(fv[1]) + gamma *
-     * point(fv[2]); */
-    /*             point(vertex) = newPoint; */
-    /*             return; */
-    /*         } */
-    /*     }); */
-    /*     _mutex.lock(); */
-    /*     i++; */
-    /*     bar.progress(i, N); */
-    /*     _mutex.unlock(); */
-    /* }); */
 
-    for (const auto &vertex : vertices()) {
-        bar.progress(i, N);
-        if (!data(vertex).isNew) {
-            i++;
-            continue;
-        }
-
-        for (const auto &face : originFaces) {
-            std::array<Point, 3> mapFace;
-            const std::vector<VertexHandle> &fv = originFaceVertices[face];
-            MapFaceFromOriginMesh(face, mapFace);
-            if (IsInTriangle(point(vertex), mapFace)) {
-                auto [alpha, beta, gamma] = CalculateBaryCoor(point(vertex), mapFace);
-                Point newPoint = alpha * point(fv[0]) + beta * point(fv[1]) + gamma * point(fv[2]);
-                point(vertex) = newPoint;
-                break;
+    auto IsMapedInASigleFace = [&](const FaceHandle &faceHandle) -> bool {
+        std::set<VertexHandle> verticesHandle;
+        for (auto vertexIter = fv_begin(faceHandle); vertexIter != fv_end(faceHandle);
+             vertexIter++) {
+            if (data(*vertexIter).barycentricCoordinates.has_value()) {
+                auto baryCoor = data(*vertexIter).barycentricCoordinates.value();
+                verticesHandle.insert(baryCoor[0].first);
+                verticesHandle.insert(baryCoor[1].first);
+                verticesHandle.insert(baryCoor[2].first);
             }
         }
+
+        return verticesHandle.size() == 3;
+    };
+
+    auto findMaxCommonVertex = [&](const std::vector<FaceHandle> &facesHandle) {
+        std::multiset<VertexHandle> verticesHandle;
+        for (const auto &faceHandle : facesHandle) {
+            for (const auto &vertexHandle : fv_range(faceHandle)) {
+                verticesHandle.insert(vertexHandle);
+            }
+        }
+
+        VertexHandle maxCommonVertex;
+        int maxCount = -1;
+        for (const auto &vertex : verticesHandle) {
+            if (verticesHandle.count(vertex) > maxCount) {
+                maxCount = static_cast<int>(verticesHandle.count(vertex));
+                maxCommonVertex = vertex;
+            }
+        }
+
+        return maxCommonVertex;
+    };
+
+    oneapi::tbb::parallel_for_each(vertices_sbegin(), vertices_end(),
+                                   [&](const VertexHandle &vertex) {
+        if (!data(vertex).isNew) {
+            _mutex.lock();
+            i++;
+            bar.progress(i, N);
+            _mutex.unlock();
+            return;
+        }
+        oneapi::tbb::parallel_for_each(originFaces.begin(), originFaces.end(),
+                                       [&](const FaceHandle &face) {
+            std::array<Point, 3> mapFace;
+            const std::vector<VertexHandle> &fv = originFaceVertices[face];
+            if (IsMapedInASigleFace(face)) {  // 原面能够完全映射到基面上
+                MapFaceFromOriginMesh(face, mapFace);
+                if (IsInTriangle(point(vertex), mapFace)) {
+                    auto [alpha, beta, gamma] = CalculateBaryCoor(point(vertex), mapFace);
+                    Point newPoint =
+                        alpha * point(fv[0]) + beta * point(fv[1]) + gamma * point(fv[2]);
+                    point(vertex) = newPoint;
+                    return;
+                }
+            } else {
+                // 在基面上找到公共顶点，并展开到2维平面计算重心坐标
+                std::vector<FaceHandle> baseFaces;
+                auto vertexFace = FindFace(point(vertex)).value();
+                for (const auto &vertexHandle : fv) {
+                    if (!IsVertexDeleted(vertexHandle)) continue;
+
+                    auto baryCoor = data(vertexHandle).barycentricCoordinates.value();
+                    auto face = FindFace({baryCoor[0].first, baryCoor[1].first, baryCoor[2].first});
+                    if (face.has_value()) {
+                        baseFaces.push_back(face.value());
+                    }
+                }
+                auto commonVertex = findMaxCommonVertex(baseFaces);
+                Coordinate2DPair coordinates;
+                Calculate2D(commonVertex, coordinates);
+                Point2D vertex2D;
+
+                std::array<std::pair<VertexHandle, Point2D>, 3> face2D;
+                for (int i = 0; i < 3; i++) {
+                    auto vertexHandle = fv[i];
+                    auto v = std::find_if(
+                        coordinates.begin(), coordinates.end(),
+                        [&vertexHandle](const std::pair<VertexHandle, Point2D> &cooridinate) {
+                        return cooridinate.first == vertexHandle;
+                        });
+                    face2D[i] = *v;
+                }
+            }
+        });
+        _mutex.lock();
         i++;
-    }
+        bar.progress(i, N);
+        _mutex.unlock();
+    });
     bar.finish();
 }
 
@@ -438,7 +481,7 @@ std::optional<std::tuple<int, double, double, double>> MapMesh::UpdateParam(
     return std::nullopt;
 }
 
-void MapMesh::Calculate2D(VertexHandle vertex, Coordinate2Dpair &coordinates) {
+void MapMesh::Calculate2D(VertexHandle vertex, Coordinate2DPair &coordinates) {
     coordinates.clear();
     auto vertex3D = point(vertex);
 
