@@ -17,8 +17,9 @@ target("Maps")
     add_files("src/*.cc")
     add_packages("openmesh", "libigl", "tbb")
     add_includedirs("include/", { public = true })
-    add_includedirs("cpptqdm/")
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
     add_deps("poly2tri")
 
     if is_mode("debug") and is_plat("linux") then

@@ -8,6 +8,7 @@ build/
 .cache
 .vscode
 .idea
+vsxmake*
 
 compile_commands.json
 

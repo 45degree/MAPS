@@ -8,8 +8,6 @@
 #include <algorithm>
 #include <limits>
 
-#include "tqdm.h"
-
 namespace Maps {
 
 template <class Mesh>
@@ -255,7 +253,7 @@ void MapMesh::CalculateCurvature() {
     igl::gaussian_curvature(V, F, K);
 
     int j = 0;
-    maxCurvature = std::numeric_limits<double>::min();
+    maxCurvature = (std::numeric_limits<double>::min)();
     for (auto i = vertices_sbegin(); i != vertices_end(); i++, j++) {
         data(*i).curvature = K[j];
         if (K[j] > maxCurvature) {
@@ -277,7 +275,7 @@ void MapMesh::CalculateWeight(double lambda) {
 }
 
 void MapMesh::CalculateAreas() {
-    maxRingArea = std::numeric_limits<double>::min();
+    maxRingArea = (std::numeric_limits<double>::min)();
     for (auto faceIter = faces_sbegin(); faceIter != faces_end(); faceIter++) {
         double area = CalculateArea(*faceIter);
         data(*faceIter).area = area;
@@ -361,7 +359,6 @@ void MapMesh::DownSampling() {
 
 void MapMesh::Remesh() {
 
-    tqdm bar;
     int N = static_cast<int>(std::distance(vertices_begin(), vertices_end()));
 
     int i = 0;
@@ -407,7 +404,6 @@ void MapMesh::Remesh() {
         if (!data(vertex).isNew) {
             _mutex.lock();
             i++;
-            bar.progress(i, N);
             _mutex.unlock();
             return;
         }
@@ -456,10 +452,8 @@ void MapMesh::Remesh() {
         });
         _mutex.lock();
         i++;
-        bar.progress(i, N);
         _mutex.unlock();
     });
-    bar.finish();
 }
 
 std::optional<std::tuple<int, double, double, double>> MapMesh::UpdateParam(
