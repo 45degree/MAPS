@@ -12,7 +12,7 @@
 
 namespace Maps {
 
-using BarycentricCoordinates = std::array<std::pair<OpenMesh::VertexHandle, double>, 3>;
+using BaryCoor = std::array<std::pair<OpenMesh::VertexHandle, double>, 3>;
 
 struct MapTrait : public OpenMesh::DefaultTraits {
    public:
@@ -22,13 +22,13 @@ struct MapTrait : public OpenMesh::DefaultTraits {
     };
 
     VertexTraits {
-        double curvature;           // 主曲率
-        bool canBeDeleted = false;  // 是否能够被删除
-        double weight;              // 权重
-        double ringArea;            // 1领域三角面片的面积之和
-        bool isTranversed = false;  // 在更新重心坐标时是否被遍历过
-        bool isNew = false;         // 是否是细分出来的点
-        std::optional<BarycentricCoordinates> barycentricCoordinates;  // 重心坐标
+        double curvature;                  // 主曲率
+        bool canBeDeleted = false;         // 是否能够被删除
+        double weight;                     // 权重
+        double ringArea;                   // 1领域三角面片的面积之和
+        bool isTranversed = false;         // 在更新重心坐标时是否被遍历过
+        bool isNew = false;                // 是否是细分出来的点
+        std::optional<BaryCoor> baryCoor;  // 重心坐标
     };
 };
 
@@ -102,7 +102,7 @@ class MapMesh : public BaseMesh<MapTrait> {
      * @brief 判断顶点是否被删除
      */
     [[nodiscard]] bool IsVertexDeleted(const MapMesh::VertexHandle& vertexHandle) const {
-        return data(vertexHandle).barycentricCoordinates.has_value();
+        return data(vertexHandle).baryCoor.has_value();
     }
 
     /**
@@ -136,7 +136,7 @@ class MapMesh : public BaseMesh<MapTrait> {
      */
     static int CDTTrangle(const Coordinate2DPair& coordinates,
                           std::vector<std::array<VertexHandle, 3>>& faces,
-                          BarycentricCoordinates& barycentricCoordinates);
+                          BaryCoor& barycentricCoordinates);
 
     /**
      * @brief MVT三角化
@@ -151,7 +151,7 @@ class MapMesh : public BaseMesh<MapTrait> {
      */
     static int MVTTrangle(const Coordinate2DPair& coordinates, int startIdx,
                           std::vector<std::array<VertexHandle, 3>>& faces,
-                          BarycentricCoordinates& barycentricCoordinates);
+                          BaryCoor& barycentricCoordinates);
 
     /**
      * @brief 重新计算某一点的参数

@@ -55,7 +55,7 @@ void MapMesh::ReadMeshFromLibigl(const Eigen::MatrixX3d &V, const Eigen::MatrixX
 
 int MapMesh::CDTTrangle(const Coordinate2DPair &coordinates,
                         std::vector<std::array<VertexHandle, 3>> &faces,
-                        BarycentricCoordinates &barycentricCoordinates) {
+                        BaryCoor &barycentricCoordinates) {
 
     faces.clear();
 
@@ -119,7 +119,7 @@ int MapMesh::CDTTrangle(const Coordinate2DPair &coordinates,
 
 int MapMesh::MVTTrangle(const Coordinate2DPair &coordinates, int startIdx,
                         std::vector<std::array<VertexHandle, 3>> &faces,
-                        BarycentricCoordinates &barycentricCoordinates) {
+                        BaryCoor &barycentricCoordinates) {
     faces.clear();
     int trangleIdx = -1;
     for (size_t i = 0, ii = 1; i < coordinates.size(); i++, ii++, ii %= coordinates.size()) {
@@ -154,7 +154,7 @@ int MapMesh::MVTTrangle(const Coordinate2DPair &coordinates, int startIdx,
 std::optional<MapMesh::Point2D> MapMesh::ReCalculate2DCoordinates(
     std::map<VertexHandle, Point2D> &originCoor, VertexHandle deleteVertex) {
     if (!IsVertexDeleted(deleteVertex)) return std::nullopt;
-    auto baryCoor = data(deleteVertex).barycentricCoordinates.value();
+    auto baryCoor = data(deleteVertex).baryCoor.value();
 
     return originCoor[baryCoor[0].first] * baryCoor[0].second +
            originCoor[baryCoor[1].first] * baryCoor[1].second +
@@ -185,14 +185,14 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
 
     delete_vertex(deleteVertex, false);
 
-    BarycentricCoordinates barycentricCoordinates;
+    BaryCoor barycentricCoordinates;
     std::vector<std::array<VertexHandle, 3>> newFaces;
 
     int trangleIdx = CDTTrangle(coordinates, newFaces, barycentricCoordinates);
     std::vector<FaceHandle> facesHandle;
     if (trangleIdx != -1 && TryToAddFaces(std::move(newFaces), facesHandle)) {
         data(facesHandle[trangleIdx]).vertrices.push_back(deleteVertex);
-        data(deleteVertex).barycentricCoordinates = barycentricCoordinates;
+        data(deleteVertex).baryCoor = barycentricCoordinates;
 
         // 判断被删除的点在那个三角形内部, 并计算重心坐标
 
@@ -202,11 +202,11 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
             auto [idx, alpha, beta, gamma] = newParma.value();
             data(facesHandle[idx]).vertrices.push_back(vertex);
 
-            BarycentricCoordinates baryCoor;
+            BaryCoor baryCoor;
             baryCoor[0].first = newFaces[idx][0], baryCoor[0].second = alpha;
             baryCoor[1].first = newFaces[idx][1], baryCoor[1].second = beta;
             baryCoor[2].first = newFaces[idx][2], baryCoor[2].second = gamma;
-            data(vertex).barycentricCoordinates = baryCoor;
+            data(vertex).baryCoor = baryCoor;
         }
 
         return;
@@ -217,7 +217,7 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
         if (TryToAddFaces(std::move(newFaces), facesHandle)) {
 
             data(facesHandle[trangleIdx]).vertrices.push_back(deleteVertex);
-            data(deleteVertex).barycentricCoordinates = barycentricCoordinates;
+            data(deleteVertex).baryCoor = barycentricCoordinates;
 
             for (auto &[vertex, point2D] : deletePoint2DMap) {
                 auto newParma = UpdateParam(newFaces, currentPoint2DMap, point2D);
@@ -225,11 +225,11 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
                 auto [idx, alpha, beta, gamma] = newParma.value();
                 data(facesHandle[idx]).vertrices.push_back(vertex);
 
-                BarycentricCoordinates baryCoor;
+                BaryCoor baryCoor;
                 baryCoor[0].first = newFaces[idx][0], baryCoor[0].second = alpha;
                 baryCoor[1].first = newFaces[idx][1], baryCoor[1].second = beta;
                 baryCoor[2].first = newFaces[idx][2], baryCoor[2].second = gamma;
-                data(vertex).barycentricCoordinates = baryCoor;
+                data(vertex).baryCoor = baryCoor;
             }
             return;
         }
@@ -303,7 +303,7 @@ void MapMesh::MapFaceFromOriginMesh(const FaceHandle &face, std::array<Point, 3>
             continue;
         }
 
-        auto baryCoor = data(vertexHandle).barycentricCoordinates.value();
+        auto baryCoor = data(vertexHandle).baryCoor.value();
         mapFace[i] = point(baryCoor[0].first) * baryCoor[0].second +
                      point(baryCoor[1].first) * baryCoor[1].second +
                      point(baryCoor[2].first) * baryCoor[2].second;
@@ -368,8 +368,8 @@ void MapMesh::Remesh() {
         std::set<VertexHandle> verticesHandle;
         for (auto vertexIter = fv_begin(faceHandle); vertexIter != fv_end(faceHandle);
              vertexIter++) {
-            if (data(*vertexIter).barycentricCoordinates.has_value()) {
-                auto baryCoor = data(*vertexIter).barycentricCoordinates.value();
+            if (data(*vertexIter).baryCoor.has_value()) {
+                auto baryCoor = data(*vertexIter).baryCoor.value();
                 verticesHandle.insert(baryCoor[0].first);
                 verticesHandle.insert(baryCoor[1].first);
                 verticesHandle.insert(baryCoor[2].first);
@@ -427,7 +427,7 @@ void MapMesh::Remesh() {
                 for (const auto &vertexHandle : fv) {
                     if (!IsVertexDeleted(vertexHandle)) continue;
 
-                    auto baryCoor = data(vertexHandle).barycentricCoordinates.value();
+                    auto baryCoor = data(vertexHandle).baryCoor.value();
                     auto face = FindFace({baryCoor[0].first, baryCoor[1].first, baryCoor[2].first});
                     if (face.has_value()) {
                         baseFaces.push_back(face.value());

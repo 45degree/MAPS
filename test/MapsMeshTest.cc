@@ -132,7 +132,7 @@ TEST_F(MapsMeshTest, FaceSubDivision) {  // NOLINT
 }
 
 TEST_F(MapsMeshTest, ReCalculate2DCoordinates) {  // NOLINT
-    using BaryCoor = Maps::BarycentricCoordinates;
+    using BaryCoor = Maps::BaryCoor;
     using VertexHandle = Maps::MapMesh::VertexHandle;
     using Point2D = Maps::MapMesh::Point2D;
 
@@ -145,7 +145,7 @@ TEST_F(MapsMeshTest, ReCalculate2DCoordinates) {  // NOLINT
     baryCoor[0] = {ringVertex[0], 0.5};
     baryCoor[1] = {ringVertex[1], 0.25};
     baryCoor[2] = {ringVertex[2], 0.25};
-    mesh.data(vertexHandle).barycentricCoordinates = baryCoor;
+    mesh.data(vertexHandle).baryCoor = baryCoor;
     mesh.data(faceHandle).vertrices.push_back(vertexHandle);
 
     std::map<Maps::MapMesh::VertexHandle, Maps::MapMesh::Point2D> originPoint2D;
@@ -166,7 +166,7 @@ TEST_F(MapsMeshTest, TEST1) {  // NOLINT
 
     for (auto vertexIter = mesh.vertices_begin(); vertexIter != mesh.vertices_end(); vertexIter++) {
         auto vertex = *vertexIter;
-        const auto& b = mesh.data(vertex).barycentricCoordinates;
+        const auto& b = mesh.data(vertex).baryCoor;
         if (b.has_value()) {
             const auto& value = b.value();
             printf("%d, %d: %lf, %d: %lf, %d: %lf\n", vertex.idx(), value[0].first.idx(),
@@ -182,7 +182,7 @@ TEST_F(MapsMeshTest, TEST1) {  // NOLINT
 
     for (auto vertexIter = mesh.vertices_begin(); vertexIter != mesh.vertices_end(); vertexIter++) {
         auto vertex = *vertexIter;
-        const auto& b = mesh.data(vertex).barycentricCoordinates;
+        const auto& b = mesh.data(vertex).baryCoor;
         if (b.has_value()) {
             const auto& value = b.value();
             printf("%d, %d: %lf, %d: %lf, %d: %lf\n", vertex.idx(), value[0].first.idx(),
