@@ -112,7 +112,7 @@ class MapMesh : public BaseMesh<MapTrait> {
      * @param[in]  vertex
      * @param[out] coordinates
      */
-    void Calculate2D(VertexHandle vertex, Coordinate2DPair& coordinates);
+    void Calculate2D(VertexHandle vertex, Coordinate2DPair& coordinates) const;
 
     /**
      * @brief 判断顶点是否被删除
@@ -130,7 +130,7 @@ class MapMesh : public BaseMesh<MapTrait> {
      * @return
      */
     std::optional<Point2D> ReCalculate2DCoordinates(
-        std::map<VertexHandle, Point2D>& originCoordinates, VertexHandle deleteVertex);
+        std::map<VertexHandle, Point2D>& originCoordinates, VertexHandle deleteVertex) const;
 
     /**
      * @brief 将原始网格中的一个面映射到现网格中
@@ -138,7 +138,7 @@ class MapMesh : public BaseMesh<MapTrait> {
      * @param[in] face
      * @param[out] mapFace
      */
-    void MapFaceFromOriginMesh(const FaceHandle& face, std::array<Point, 3>& mapFace);
+    void MapFaceFromOriginMesh(const FaceHandle& face, std::array<Point, 3>& mapFace) const;
 
     /**
      * @brief CDT三角化

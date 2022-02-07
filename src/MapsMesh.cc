@@ -152,7 +152,7 @@ int MapMesh::MVTTrangle(const Coordinate2DPair &coordinates, int startIdx,
 }
 
 std::optional<MapMesh::Point2D> MapMesh::ReCalculate2DCoordinates(
-    std::map<VertexHandle, Point2D> &originCoor, VertexHandle deleteVertex) {
+    std::map<VertexHandle, Point2D> &originCoor, VertexHandle deleteVertex) const {
     if (!IsVertexDeleted(deleteVertex)) return std::nullopt;
     auto baryCoor = data(deleteVertex).baryCoor.value();
 
@@ -293,8 +293,10 @@ void MapMesh::CalculateAreas() {
     }
 }
 
-void MapMesh::MapFaceFromOriginMesh(const FaceHandle &face, std::array<Point, 3> &mapFace) {
-    const std::vector<VertexHandle> &vertices = originFaceVertices[face];
+void MapMesh::MapFaceFromOriginMesh(const FaceHandle &face, std::array<Point, 3> &mapFace) const {
+    if (originFaceVertices.find(face) == originFaceVertices.end()) return;
+
+    const std::vector<VertexHandle> &vertices = originFaceVertices.at(face);
     assert(vertices.size() == 3);
     for (int i = 0; i < 3; i++) {
         auto vertexHandle = vertices[i];
@@ -541,34 +543,36 @@ std::optional<std::tuple<int, double, double, double>> MapMesh::UpdateParam(
     return std::nullopt;
 }
 
-void MapMesh::Calculate2D(VertexHandle vertex, Coordinate2DPair &coordinates) {
+void MapMesh::Calculate2D(VertexHandle vertex, Coordinate2DPair &coordinates) const {
     coordinates.clear();
     auto vertex3D = point(vertex);
 
     double K_i = 0;
-    for (auto faceIter = vf_begin(vertex); faceIter != vf_end(vertex); faceIter++) {
-        K_i += CalculateAngle(vertex, *faceIter);
+    for (const auto &face : vf_range(vertex)) {
+        K_i += CalculateAngle(vertex, face);
     }
     double a = 2 * M_PI / K_i;
 
     K_i = 0;
 
     VertexHandle lastVertex;
-    for (auto ringPointIter = vv_begin(vertex); ringPointIter != vv_end(vertex); ringPointIter++) {
-        if (ringPointIter != vv_begin(vertex)) {
+    int i = 0;
+    for (const auto &ringPoint : vv_range(vertex)) {
+        if (i != 0) {
             auto Vec1 = point(lastVertex) - point(vertex);
-            auto Vec2 = point(*ringPointIter) - point(vertex);
+            auto Vec2 = point(ringPoint) - point(vertex);
 
             K_i += std::acos(Vec1.normalized().dot(Vec2.normalized()));
         }
-
-        auto point3D = point(*ringPointIter);
+        auto point3D = point(ringPoint);
         double r_k = (point3D - vertex3D).norm();
 
         Point2D point2D{std::pow(r_k, a) * std::cos(K_i * a), std::pow(r_k, a) * std::sin(K_i * a)};
 
-        coordinates.emplace_back(*ringPointIter, point2D);
-        lastVertex = *ringPointIter;
+        coordinates.emplace_back(ringPoint, point2D);
+        lastVertex = ringPoint;
+
+        i++;
     }
 }
 

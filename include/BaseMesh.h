@@ -32,12 +32,12 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
     /**
      * @brief 计算一个面的面积
      */
-    double CalculateArea(const FaceHandle& faceHandle);
+    double CalculateArea(const FaceHandle& faceHandle) const;
 
     /**
      * @brief 计算一个面中一个顶点的角度
      */
-    double CalculateAngle(const VertexHandle& vertex, const FaceHandle& face);
+    double CalculateAngle(const VertexHandle& vertex, const FaceHandle& face) const;
 
     /**
      * @brief 尝试添加一个面
@@ -72,9 +72,12 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
         return std::nullopt;
     }
 
-    std::optional<FaceHandle> FindFace(const Point& point) {
+    std::optional<FaceHandle> FindFace(const Point& point) const {
         for (const auto& face : this->faces()) {
-            std::vector<VertexHandle> triangle(this->fv_begin(face), this->fv_end(face));
+            std::vector<VertexHandle> triangle;  // (this->fv_begin(face), this->fv_end(face));
+            for (const auto& vertex : this->fv_range(face)) {
+                triangle.push_back(vertex);
+            }
             if (IsInTriangle(point, {this->point(triangle[0]), this->point(triangle[1]),
                                      this->point(triangle[2])})) {
                 return face;
@@ -125,9 +128,12 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
 };
 
 template <typename T>
-double BaseMesh<T>::CalculateArea(const FaceHandle& faceHandle) {
+double BaseMesh<T>::CalculateArea(const FaceHandle& faceHandle) const {
 
-    std::vector<VertexHandle> vertices(this->fv_begin(faceHandle), this->fv_end(faceHandle));
+    std::vector<VertexHandle> vertices;  //(this->fv_begin(faceHandle), this->fv_end(faceHandle));
+    for (const auto& vertex : this->fv_range(faceHandle)) {
+        vertices.push_back(vertex);
+    }
     assert(vertices.size() == 3);
     auto Vec1 = this->point(vertices[1]) - this->point(vertices[0]);
     auto Vec2 = this->point(vertices[2]) - this->point(vertices[0]);
@@ -137,7 +143,8 @@ double BaseMesh<T>::CalculateArea(const FaceHandle& faceHandle) {
 }
 
 template <typename T>
-double BaseMesh<T>::CalculateAngle(const VertexHandle& vertexHandle, const FaceHandle& faceHandle) {
+double BaseMesh<T>::CalculateAngle(const VertexHandle& vertexHandle,
+                                   const FaceHandle& faceHandle) const {
 
     auto point1 = this->point(vertexHandle);
     Eigen::Vector3d vertex;
@@ -146,11 +153,9 @@ double BaseMesh<T>::CalculateAngle(const VertexHandle& vertexHandle, const FaceH
     vertex[2] = point1[2];
 
     std::vector<Eigen::Vector3d> points;
-    for (auto _pointIter = this->fv_begin(faceHandle); _pointIter != this->fv_end(faceHandle);
-         _pointIter++) {
-
-        if (*_pointIter != vertexHandle) {
-            auto _point = this->point(*_pointIter);
+    for (const auto& vertex : this->fv_range(faceHandle)) {
+        if (vertex != vertexHandle) {
+            auto _point = this->point(vertex);
             Eigen::Vector3d p;
             p[0] = _point[0];
             p[1] = _point[1];
@@ -158,6 +163,18 @@ double BaseMesh<T>::CalculateAngle(const VertexHandle& vertexHandle, const FaceH
             points.emplace_back(p);
         }
     }
+    /* for (auto _pointIter = this->fv_begin(faceHandle); _pointIter != this->fv_end(faceHandle); */
+    /*      _pointIter++) { */
+
+    /*     if (*_pointIter != vertexHandle) { */
+    /*         auto _point = this->point(*_pointIter); */
+    /*         Eigen::Vector3d p; */
+    /*         p[0] = _point[0]; */
+    /*         p[1] = _point[1]; */
+    /*         p[2] = _point[2]; */
+    /*         points.emplace_back(p); */
+    /*     } */
+    /* } */
     assert(points.size() == 2);
 
     auto Vec1 = points[0] - vertex;

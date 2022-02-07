@@ -3,9 +3,7 @@
 #include <OpenMesh/Core/IO/MeshIO.hh>
 #include <cstdio>
 
-#define private public
 #include "MapsMesh.h"
-#undef private
 
 class MapsMeshTest : public ::testing::Test {
    protected:
