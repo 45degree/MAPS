@@ -18,6 +18,8 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
    public:
     using Point2D = OpenMesh::VectorT<double, 2>;
     using Coordinate2DPair = std::vector<std::pair<VertexHandle, Point2D>>;
+    using Coordinate2DMap = std::map<VertexHandle, Point2D>;
+
     using CoordinatePair = std::vector<std::pair<VertexHandle, Point>>;
     using Triangles = std::vector<std::array<std::pair<VertexHandle, Point2D>, 3>>;
 

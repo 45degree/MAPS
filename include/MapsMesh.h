@@ -48,7 +48,11 @@ class MapMesh : public BaseMesh<MapTrait> {
 
    public:
     MapMesh() : curvatureQueue(CompareFun(this)) {}
-    ~MapMesh() override = default;
+    ~MapMesh() override {
+        if (baseLevelMesh != nullptr) {
+            delete baseLevelMesh;
+        }
+    }
 
     MapMesh(const MapMesh& mapMesh) = default;
 
@@ -89,6 +93,18 @@ class MapMesh : public BaseMesh<MapTrait> {
      * @param deleteVertex
      */
     void ReTrangleAndAddFace(const VertexHandle& deleteVertex);
+
+    inline void SaveBaseLevelMesh() {
+        auto* newMesh = new MapMesh(*this);
+        newMesh->ClearBaseLevelMesh();
+        if (baseLevelMesh != nullptr) {
+            delete baseLevelMesh;
+        }
+        baseLevelMesh = newMesh;
+    }
+
+   public:
+    inline void ClearBaseLevelMesh() { baseLevelMesh = nullptr; }
 
     /**
      * @brief 计算1领域点的2维坐标
@@ -169,6 +185,7 @@ class MapMesh : public BaseMesh<MapTrait> {
    private:
     double maxRingArea;
     double maxCurvature;
+    MapMesh* baseLevelMesh = nullptr;
     std::vector<FaceHandle> originFaces;  // 原始网格中所有的面
     std::map<FaceHandle, std::vector<VertexHandle>> originFaceVertices;
     std::priority_queue<VertexHandle, std::vector<VertexHandle>, CompareFun> curvatureQueue;

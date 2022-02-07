@@ -177,6 +177,15 @@ TEST_F(MapsMeshTest, TEST1) {  // NOLINT
         }
     }
 
+    std::cout << "new face" << std::endl;
+    for (const auto& face : mesh.faces()) {
+        std::cout << face.idx() << ':';
+        for (const auto& vertexHandle : mesh.fv_range(face)) {
+            std::cout << vertexHandle.idx() << ',';
+        }
+        std::cout << std::endl;
+    }
+
     mesh.Initialize();
     mesh.DownSampling();
 
@@ -195,18 +204,19 @@ TEST_F(MapsMeshTest, TEST1) {  // NOLINT
 }
 
 TEST_F(MapsMeshTest, TEST2) {  // NOLINT
-    /* mesh.Initialize(); */
-    /* mesh.DownSampling(); */
-    /* mesh.FaceSubDivision(); */
-    /* mesh.FaceSubDivision(); */
-    /* mesh.Remesh(); */
+    mesh.Initialize();
+    mesh.DownSampling();
+    mesh.FaceSubDivision();
+    mesh.FaceSubDivision();
+    mesh.FaceSubDivision();
+    mesh.Remesh();
 
-    /* mesh.garbage_collection(); */
-    /* try { */
-    /*     if (!OpenMesh::IO::write_mesh(mesh, "cube_output.off")) { */
-    /*         std::cerr << "Cannot write mesh to file 'output.off'" << std::endl; */
-    /*     } */
-    /* } catch (std::exception& x) { */
-    /*     std::cerr << x.what() << std::endl; */
-    /* } */
+    mesh.garbage_collection();
+    try {
+        if (!OpenMesh::IO::write_mesh(mesh, "cube_output.off")) {
+            std::cerr << "Cannot write mesh to file 'output.off'" << std::endl;
+        }
+    } catch (std::exception& x) {
+        std::cerr << x.what() << std::endl;
+    }
 }

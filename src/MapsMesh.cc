@@ -355,6 +355,7 @@ void MapMesh::DownSampling() {
 
         ReTrangleAndAddFace(vertexHandle);
     }
+    SaveBaseLevelMesh();
 }
 
 void MapMesh::Remesh() {
@@ -364,15 +365,16 @@ void MapMesh::Remesh() {
     int i = 0;
     std::mutex _mutex;
 
-    auto IsMapedInASigleFace = [&](const FaceHandle &faceHandle) -> bool {
+    auto IsMapedInASingleFace = [&](const FaceHandle &faceHandle) -> bool {
         std::set<VertexHandle> verticesHandle;
-        for (auto vertexIter = fv_begin(faceHandle); vertexIter != fv_end(faceHandle);
-             vertexIter++) {
-            if (data(*vertexIter).baryCoor.has_value()) {
-                auto baryCoor = data(*vertexIter).baryCoor.value();
+        for (const auto &vertexHandle : originFaceVertices[faceHandle]) {
+            if (data(vertexHandle).baryCoor.has_value()) {
+                auto baryCoor = data(vertexHandle).baryCoor.value();
                 verticesHandle.insert(baryCoor[0].first);
                 verticesHandle.insert(baryCoor[1].first);
                 verticesHandle.insert(baryCoor[2].first);
+            } else {
+                verticesHandle.insert(vertexHandle);
             }
         }
 
@@ -382,7 +384,7 @@ void MapMesh::Remesh() {
     auto findMaxCommonVertex = [&](const std::vector<FaceHandle> &facesHandle) {
         std::multiset<VertexHandle> verticesHandle;
         for (const auto &faceHandle : facesHandle) {
-            for (const auto &vertexHandle : fv_range(faceHandle)) {
+            for (const auto &vertexHandle : baseLevelMesh->fv_range(faceHandle)) {
                 verticesHandle.insert(vertexHandle);
             }
         }
@@ -390,7 +392,8 @@ void MapMesh::Remesh() {
         VertexHandle maxCommonVertex;
         int maxCount = -1;
         for (const auto &vertex : verticesHandle) {
-            if (verticesHandle.count(vertex) > maxCount) {
+            int count = static_cast<int>(verticesHandle.count(vertex));
+            if (count > maxCount) {
                 maxCount = static_cast<int>(verticesHandle.count(vertex));
                 maxCommonVertex = vertex;
             }
@@ -399,61 +402,124 @@ void MapMesh::Remesh() {
         return maxCommonVertex;
     };
 
-    oneapi::tbb::parallel_for_each(vertices_sbegin(), vertices_end(),
-                                   [&](const VertexHandle &vertex) {
+    auto isRingFace = [&](const VertexHandle &vertexHandle, const FaceHandle &faceHandle) {
+        for (const auto &face : baseLevelMesh->vf_range(vertexHandle)) {
+            if (face == faceHandle) return true;
+        }
+        return false;
+    };
+
+    /* oneapi::tbb::parallel_for_each(vertices_sbegin(), vertices_end(), */
+    /*                                [&](const VertexHandle &vertex) { */
+    for (const auto &vertex : vertices()) {
         if (!data(vertex).isNew) {
             _mutex.lock();
             i++;
             _mutex.unlock();
-            return;
+            continue;
+            /* return; */
         }
-        oneapi::tbb::parallel_for_each(originFaces.begin(), originFaces.end(),
-                                       [&](const FaceHandle &face) {
+        /* oneapi::tbb::parallel_for_each(originFaces.begin(), originFaces.end(), */
+        /*                                [&](const FaceHandle &face) { */
+        for (const auto &face : originFaces) {
+
             std::array<Point, 3> mapFace;
             const std::vector<VertexHandle> &fv = originFaceVertices[face];
-            if (IsMapedInASigleFace(face)) {  // 原面能够完全映射到基面上
+            if (IsMapedInASingleFace(face)) {  // 原面能够完全映射到基面上
                 MapFaceFromOriginMesh(face, mapFace);
                 if (IsInTriangle(point(vertex), mapFace)) {
                     auto [alpha, beta, gamma] = CalculateBaryCoor(point(vertex), mapFace);
                     Point newPoint =
                         alpha * point(fv[0]) + beta * point(fv[1]) + gamma * point(fv[2]);
                     point(vertex) = newPoint;
-                    return;
+                    break;
+                    /* return; */
                 }
             } else {
                 // 在基面上找到公共顶点，并展开到2维平面计算重心坐标
                 std::vector<FaceHandle> baseFaces;
-                auto vertexFace = FindFace(point(vertex)).value();
+                auto vertexFace = baseLevelMesh->FindFace(point(vertex)).value();
                 for (const auto &vertexHandle : fv) {
                     if (!IsVertexDeleted(vertexHandle)) continue;
 
                     auto baryCoor = data(vertexHandle).baryCoor.value();
-                    auto face = FindFace({baryCoor[0].first, baryCoor[1].first, baryCoor[2].first});
+                    auto face = baseLevelMesh->FindFace(
+                        {baryCoor[0].first, baryCoor[1].first, baryCoor[2].first});
+
                     if (face.has_value()) {
                         baseFaces.push_back(face.value());
                     }
                 }
-                auto commonVertex = findMaxCommonVertex(baseFaces);
-                Coordinate2DPair coordinates;
-                Calculate2D(commonVertex, coordinates);
+
+                VertexHandle commonVertex;
+                if (baseFaces.size() == 3) {
+                    if (std::find(baseFaces.begin(), baseFaces.end(), vertexFace) ==
+                        baseFaces.end()) {
+                        continue;
+                    }
+                    commonVertex = findMaxCommonVertex(baseFaces);
+                } else {
+                    bool foundCommonVertex = false;
+                    for (const auto &baseFace : baseFaces) {
+                        for (const auto &baseVert : baseLevelMesh->fv_range(baseFace)) {
+                            if (isRingFace(baseVert, vertexFace)) {
+                                commonVertex = baseVert;
+                                foundCommonVertex = true;
+                                break;
+                            }
+                        }
+                        if (foundCommonVertex) break;
+                    }
+                    if (!foundCommonVertex) continue;
+                }
+
+                Coordinate2DPair coorPair;
+                baseLevelMesh->Calculate2D(commonVertex, coorPair);
+
+                Coordinate2DMap coorMap(coorPair.begin(), coorPair.end());
                 Point2D vertex2D;
+                auto vertex2DBaryCoor = baseLevelMesh->CalculateBaryCoor(point(vertex), vertexFace);
+                for (const auto &vertex2DBaryCoorItem : vertex2DBaryCoor) {
+                    if (coorMap.find(vertex2DBaryCoorItem.first) == coorMap.end()) {
+                        continue;
+                    }
+                    vertex2D +=
+                        coorMap.at(vertex2DBaryCoorItem.first) * vertex2DBaryCoorItem.second;
+                }
 
                 std::array<std::pair<VertexHandle, Point2D>, 3> face2D;
                 for (int i = 0; i < 3; i++) {
-                    auto vertexHandle = fv[i];
-                    auto v = std::find_if(
-                        coordinates.begin(), coordinates.end(),
-                        [&vertexHandle](const std::pair<VertexHandle, Point2D> &cooridinate) {
-                        return cooridinate.first == vertexHandle;
-                        });
-                    face2D[i] = *v;
+                    face2D[i].first = fv[i];
+                    face2D[i].second = Point2D(0, 0);
+                    if (!IsVertexDeleted(fv[i])) {
+                        face2D[i].second = coorMap[fv[i]];
+                        continue;
+                    }
+
+                    auto baryCoor = data(fv[i]).baryCoor.value();
+                    for (const auto &baryCoorItem : baryCoor) {
+                        face2D[i].second += coorMap[baryCoorItem.first] * baryCoorItem.second;
+                    }
                 }
+
+                std::array<Point2D, 3> triangle{face2D[0].second, face2D[1].second,
+                                                face2D[2].second};
+
+                if (!IsInTriangle(vertex2D, triangle)) continue;
+
+                auto [alpha, beta, gamma] = CalculateBaryCoor(vertex2D, triangle);
+
+                point(vertex) = alpha * point(face2D[0].first) + beta * point(face2D[1].first) +
+                                gamma * point(face2D[2].first);
+                break;
             }
-        });
+            /* }); */
+        }
         _mutex.lock();
         i++;
         _mutex.unlock();
-    });
+        /* }); */
+    }
 }
 
 std::optional<std::tuple<int, double, double, double>> MapMesh::UpdateParam(
