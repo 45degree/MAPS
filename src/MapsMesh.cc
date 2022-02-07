@@ -411,6 +411,20 @@ void MapMesh::Remesh() {
         return false;
     };
 
+    auto isRingPoint =
+        [&](const VertexHandle &vertexHandle, const std::vector<VertexHandle> &ringVertices) {
+        for (const auto &ringVertex : ringVertices) {
+            bool found = false;
+            for (const auto &realRingVertex : baseLevelMesh->vv_range(vertexHandle)) {
+                if (realRingVertex == ringVertex) {
+                    found = true;
+                }
+            }
+            if (!found) return false;
+        }
+        return true;
+    };
+
     /* oneapi::tbb::parallel_for_each(vertices_sbegin(), vertices_end(), */
     /*                                [&](const VertexHandle &vertex) { */
     for (const auto &vertex : vertices()) {
@@ -440,9 +454,13 @@ void MapMesh::Remesh() {
             } else {
                 // 在基面上找到公共顶点，并展开到2维平面计算重心坐标
                 std::vector<FaceHandle> baseFaces;
+                std::vector<VertexHandle> fixVertex;
                 auto vertexFace = baseLevelMesh->FindFace(point(vertex)).value();
                 for (const auto &vertexHandle : fv) {
-                    if (!IsVertexDeleted(vertexHandle)) continue;
+                    if (!IsVertexDeleted(vertexHandle)) {
+                        fixVertex.push_back(vertexHandle);
+                        continue;
+                    }
 
                     auto baryCoor = data(vertexHandle).baryCoor.value();
                     auto face = baseLevelMesh->FindFace(
@@ -464,7 +482,8 @@ void MapMesh::Remesh() {
                     bool foundCommonVertex = false;
                     for (const auto &baseFace : baseFaces) {
                         for (const auto &baseVert : baseLevelMesh->fv_range(baseFace)) {
-                            if (isRingFace(baseVert, vertexFace)) {
+                            if (isRingFace(baseVert, vertexFace) &&
+                                isRingPoint(baseVert, fixVertex)) {
                                 commonVertex = baseVert;
                                 foundCommonVertex = true;
                                 break;
@@ -500,6 +519,9 @@ void MapMesh::Remesh() {
 
                     auto baryCoor = data(fv[i]).baryCoor.value();
                     for (const auto &baryCoorItem : baryCoor) {
+                        if (coorMap.find(baryCoorItem.first) == coorMap.end()) {
+                            throw std::runtime_error("can't found item");
+                        }
                         face2D[i].second += coorMap[baryCoorItem.first] * baryCoorItem.second;
                     }
                 }

@@ -9,6 +9,7 @@ build/
 .vscode
 .idea
 vsxmake*
+.vs
 
 compile_commands.json
 
