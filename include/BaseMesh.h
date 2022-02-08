@@ -224,6 +224,7 @@ bool BaseMesh<T>::TryToAddFaces(std::vector<std::array<VertexHandle, 3>>&& faces
 
 template <typename T>
 bool BaseMesh<T>::IsInTriangle(const Point2D& point, const std::array<Point2D, 3>& triangle2D) {
+    double esp = 1e-5;
     Point point0(point[0], point[1], 0);
     Point point1(triangle2D[0][0], triangle2D[0][1], 0);
     Point point2(triangle2D[1][0], triangle2D[1][1], 0);
@@ -233,7 +234,9 @@ bool BaseMesh<T>::IsInTriangle(const Point2D& point, const std::array<Point2D, 3
     double z2 = (point0 - point2).cross(point3 - point2)[2];
     double z3 = (point0 - point3).cross(point1 - point3)[2];
 
-    if ((z1 >= 0 && z2 >= 0 && z3 >= 0) || (z1 <= 0 && z2 <= 0 && z3 <= 0)) return true;
+    if ((z1 >= -esp && z2 >= -esp && z3 >= -esp) || (z1 <= esp && z2 <= esp && z3 <= esp)) {
+        return true;
+    }
 
     return false;
 }

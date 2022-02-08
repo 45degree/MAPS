@@ -207,7 +207,8 @@ TEST_F(MapsMeshTest, TEST2) {  // NOLINT
     mesh.FaceSubDivision();
     mesh.FaceSubDivision();
     mesh.FaceSubDivision();
-    mesh.Remesh(); 
+    mesh.FaceSubDivision();
+    mesh.Remesh();
 
     mesh.garbage_collection();
     try {

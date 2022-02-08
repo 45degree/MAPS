@@ -437,8 +437,9 @@ void MapMesh::Remesh() {
         }
         /* oneapi::tbb::parallel_for_each(originFaces.begin(), originFaces.end(), */
         /*                                [&](const FaceHandle &face) { */
-        for (const auto &face : originFaces) {
 
+        bool isChanged = false;
+        for (const auto &face : originFaces) {
             std::array<Point, 3> mapFace;
             const std::vector<VertexHandle> &fv = originFaceVertices[face];
             if (IsMapedInASingleFace(face)) {  // 原面能够完全映射到基面上
@@ -448,6 +449,7 @@ void MapMesh::Remesh() {
                     Point newPoint =
                         alpha * point(fv[0]) + beta * point(fv[1]) + gamma * point(fv[2]);
                     point(vertex) = newPoint;
+                    isChanged = true;
                     break;
                     /* return; */
                 }
@@ -498,7 +500,7 @@ void MapMesh::Remesh() {
                 baseLevelMesh->Calculate2D(commonVertex, coorPair);
 
                 Coordinate2DMap coorMap(coorPair.begin(), coorPair.end());
-                Point2D vertex2D;
+                Point2D vertex2D(0, 0);
                 auto vertex2DBaryCoor = baseLevelMesh->CalculateBaryCoor(point(vertex), vertexFace);
                 for (const auto &vertex2DBaryCoorItem : vertex2DBaryCoor) {
                     if (coorMap.find(vertex2DBaryCoorItem.first) == coorMap.end()) {
@@ -519,10 +521,11 @@ void MapMesh::Remesh() {
 
                     auto baryCoor = data(fv[i]).baryCoor.value();
                     for (const auto &baryCoorItem : baryCoor) {
+                        if (baryCoorItem.first == commonVertex) continue;
                         if (coorMap.find(baryCoorItem.first) == coorMap.end()) {
                             throw std::runtime_error("can't found item");
                         }
-                        face2D[i].second += coorMap[baryCoorItem.first] * baryCoorItem.second;
+                        face2D[i].second += coorMap.at(baryCoorItem.first) * baryCoorItem.second;
                     }
                 }
 
@@ -535,9 +538,13 @@ void MapMesh::Remesh() {
 
                 point(vertex) = alpha * point(face2D[0].first) + beta * point(face2D[1].first) +
                                 gamma * point(face2D[2].first);
+                isChanged = true;
                 break;
             }
             /* }); */
+        }
+        if (!isChanged) {
+            throw std::runtime_error("no changed for vertex" + std::to_string(vertex.idx()));
         }
         _mutex.lock();
         i++;
