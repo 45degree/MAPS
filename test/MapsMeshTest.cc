@@ -158,64 +158,17 @@ TEST_F(MapsMeshTest, ReCalculate2DCoordinates) {  // NOLINT
     ASSERT_FLOAT_EQ(1.0 / 4, result[1]);
 }
 
-TEST_F(MapsMeshTest, TEST1) {  // NOLINT
+TEST_F(MapsMeshTest, DownSamplingTest) {  // NOLINT
     mesh.Initialize();
+    mesh.DownSampling();
     mesh.DownSampling();
 
     for (auto vertexIter = mesh.vertices_begin(); vertexIter != mesh.vertices_end(); vertexIter++) {
         auto vertex = *vertexIter;
-        const auto& b = mesh.data(vertex).baryCoor;
-        if (b.has_value()) {
-            const auto& value = b.value();
-            printf("%d, %d: %lf, %d: %lf, %d: %lf\n", vertex.idx(), value[0].first.idx(),
-                   value[0].second, value[1].first.idx(), value[1].second, value[2].first.idx(),
-                   value[2].second);
-        } else {
-            printf("%d, none\n", vertex.idx());
-        }
-    }
+        if (!mesh.data(vertex).baryCoor.has_value()) continue;
 
-    std::cout << "new face" << std::endl;
-    for (const auto& face : mesh.faces()) {
-        std::cout << face.idx() << ':';
-        for (const auto& vertexHandle : mesh.fv_range(face)) {
-            std::cout << vertexHandle.idx() << ',';
-        }
-        std::cout << std::endl;
-    }
-
-    mesh.Initialize();
-    mesh.DownSampling();
-
-    for (auto vertexIter = mesh.vertices_begin(); vertexIter != mesh.vertices_end(); vertexIter++) {
-        auto vertex = *vertexIter;
-        const auto& b = mesh.data(vertex).baryCoor;
-        if (b.has_value()) {
-            const auto& value = b.value();
-            printf("%d, %d: %lf, %d: %lf, %d: %lf\n", vertex.idx(), value[0].first.idx(),
-                   value[0].second, value[1].first.idx(), value[1].second, value[2].first.idx(),
-                   value[2].second);
-        } else {
-            printf("%d, none\n", vertex.idx());
-        }
-    }
-}
-
-TEST_F(MapsMeshTest, TEST2) {  // NOLINT
-    mesh.Initialize();
-    mesh.DownSampling();
-    mesh.FaceSubDivision();
-    mesh.FaceSubDivision();
-    mesh.FaceSubDivision();
-    mesh.FaceSubDivision();
-    mesh.Remesh();
-
-    mesh.garbage_collection();
-    try {
-        if (!OpenMesh::IO::write_mesh(mesh, "cube_output.off")) {
-            std::cerr << "Cannot write mesh to file 'output.off'" << std::endl;
-        }
-    } catch (std::exception& x) {
-        std::cerr << x.what() << std::endl;
+        auto baryCoor = mesh.data(vertex).baryCoor.value();
+        auto faceOption = mesh.FindFace({baryCoor[0].first, baryCoor[1].first, baryCoor[2].first});
+        ASSERT_TRUE(faceOption.has_value());
     }
 }

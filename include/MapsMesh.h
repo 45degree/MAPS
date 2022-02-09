@@ -1,7 +1,6 @@
 #ifndef MAPS_MAPS_MESH_H
 #define MAPS_MAPS_MESH_H
 
-#include <Eigen/Dense>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
 #include <array>
 #include <functional>
@@ -57,8 +56,6 @@ class MapMesh : public BaseMesh<MapTrait> {
     MapMesh(const MapMesh& mapMesh) = default;
 
    public:
-    void ReadMeshFromLibigl(const Eigen::MatrixX3d& V, const Eigen::MatrixX3i& F);
-
     void Initialize();
 
     void DownSampling();

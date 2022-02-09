@@ -1,9 +1,12 @@
 ---@diagnostic disable: undefined-global, undefined-field
 
+add_repositories("my-repo https://github.com/45degree/personal-xmake-repo.git main")
+
 add_rules("mode.debug", "mode.release")
 add_requires("openmesh", {debug = true})
 add_requires("libigl", "tbb")
 add_requires("gtest")
+add_requires("progressbar v2.1")
 
 target("poly2tri")
     set_kind("static")
@@ -15,7 +18,7 @@ target("Maps")
     set_kind("static")
     set_languages("c99", "c++17")
     add_files("src/*.cc")
-    add_packages("openmesh", "libigl", "tbb")
+    add_packages("openmesh", "libigl", "tbb", "progressbar")
     add_includedirs("include/", { public = true })
     if is_plat("linux") then
         add_syslinks("pthread")
@@ -40,16 +43,24 @@ target("MapsTest")
 target_end()
 
 target("MapsExample")
+    set_kind("phony")
+    add_deps("MapsExample1", "MapsExample2")
+target_end()
+
+target("MapsExample2")
     set_kind("binary")
     set_languages("c99", "c++17")
-    add_files("example/*.cc")
+    add_files("example/example2.cc")
     add_deps("Maps")
-    add_packages("openmesh", "libigl")
+    add_packages("openmesh")
+target_end()
 
-    if is_mode("debug") and is_plat("linux") then
-        add_cxflags("-pg")
-    end
-
+target("MapsExample1")
+    set_kind("binary")
+    set_languages("c99", "c++17")
+    add_files("example/example1.cc")
+    add_deps("Maps")
+    add_packages("openmesh")
 target_end()
 
 --

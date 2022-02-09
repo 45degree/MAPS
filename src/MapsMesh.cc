@@ -7,6 +7,7 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <limits>
+#include <progressbar/progressbar.hpp>
 
 namespace Maps {
 
@@ -39,17 +40,6 @@ static void OpenMesh2IGL(const Mesh *mesh, Eigen::MatrixX3d &V, Eigen::MatrixX3i
             F(j, vi) = newVertexHandleMap[*fvi];
             vi++;
         }
-    }
-}
-
-void MapMesh::ReadMeshFromLibigl(const Eigen::MatrixX3d &V, const Eigen::MatrixX3i &F) {
-    std::vector<VertexHandle> vertexHandle(V.rows());
-    for (int i = 0; i < V.rows(); i++) {
-        vertexHandle[i] = add_vertex(Point(V(i, 0), V(i, 1), V(i, 2)));
-    }
-
-    for (int i = 0; i < F.rows(); i++) {
-        add_face({vertexHandle[F(i, 0)], vertexHandle[F(i, 1)], vertexHandle[F(i, 2)]});
     }
 }
 
@@ -190,7 +180,7 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
 
     int trangleIdx = CDTTrangle(coordinates, newFaces, barycentricCoordinates);
     std::vector<FaceHandle> facesHandle;
-    if (trangleIdx != -1 && TryToAddFaces(std::move(newFaces), facesHandle)) {
+    if (trangleIdx != -1 && TryToAddFaces(newFaces, facesHandle)) {
         data(facesHandle[trangleIdx]).vertrices.push_back(deleteVertex);
         data(deleteVertex).baryCoor = barycentricCoordinates;
 
@@ -214,7 +204,7 @@ void MapMesh::ReTrangleAndAddFace(const VertexHandle &deleteVertex) {
     for (int i = 0; i < coordinates.size(); i++) {
         newFaces.clear();
         trangleIdx = MVTTrangle(coordinates, i, newFaces, barycentricCoordinates);
-        if (TryToAddFaces(std::move(newFaces), facesHandle)) {
+        if (TryToAddFaces(newFaces, facesHandle)) {
 
             data(facesHandle[trangleIdx]).vertrices.push_back(deleteVertex);
             data(deleteVertex).baryCoor = barycentricCoordinates;
@@ -362,9 +352,9 @@ void MapMesh::DownSampling() {
 
 void MapMesh::Remesh() {
 
-    int N = static_cast<int>(std::distance(vertices_begin(), vertices_end()));
+    int N = static_cast<int>(std::distance(vertices_sbegin(), vertices_end()));
+    progressbar bar(N);
 
-    int i = 0;
     std::mutex _mutex;
 
     auto IsMapedInASingleFace = [&](const FaceHandle &faceHandle) -> bool {
@@ -425,23 +415,31 @@ void MapMesh::Remesh() {
         return true;
     };
 
-    /* oneapi::tbb::parallel_for_each(vertices_sbegin(), vertices_end(), */
-    /*                                [&](const VertexHandle &vertex) { */
-    for (const auto &vertex : vertices()) {
+    oneapi::tbb::parallel_for_each(vertices_sbegin(), vertices_end(),
+                                   [&](const VertexHandle &vertex) {
         if (!data(vertex).isNew) {
             _mutex.lock();
-            i++;
+            bar.update();
             _mutex.unlock();
-            continue;
-            /* return; */
+            /* continue; */
+            return;
         }
-        /* oneapi::tbb::parallel_for_each(originFaces.begin(), originFaces.end(), */
-        /*                                [&](const FaceHandle &face) { */
 
-        bool isChanged = false;
+        // 在基面上找到公共顶点，并展开到2维平面计算重心坐标
+        auto vertexFaceOption = baseLevelMesh->FindFace(point(vertex));
+        if (!vertexFaceOption.has_value()) {
+            _mutex.lock();
+            bar.update();
+            _mutex.unlock();
+            /* continue; */
+            return;
+        }
+        auto vertexFace = vertexFaceOption.value();
+
         for (const auto &face : originFaces) {
             std::array<Point, 3> mapFace;
             const std::vector<VertexHandle> &fv = originFaceVertices[face];
+
             if (IsMapedInASingleFace(face)) {  // 原面能够完全映射到基面上
                 MapFaceFromOriginMesh(face, mapFace);
                 if (IsInTriangle(point(vertex), mapFace)) {
@@ -449,15 +447,12 @@ void MapMesh::Remesh() {
                     Point newPoint =
                         alpha * point(fv[0]) + beta * point(fv[1]) + gamma * point(fv[2]);
                     point(vertex) = newPoint;
-                    isChanged = true;
                     break;
-                    /* return; */
                 }
             } else {
-                // 在基面上找到公共顶点，并展开到2维平面计算重心坐标
+
                 std::vector<FaceHandle> baseFaces;
                 std::vector<VertexHandle> fixVertex;
-                auto vertexFace = baseLevelMesh->FindFace(point(vertex)).value();
                 for (const auto &vertexHandle : fv) {
                     if (!IsVertexDeleted(vertexHandle)) {
                         fixVertex.push_back(vertexHandle);
@@ -511,6 +506,7 @@ void MapMesh::Remesh() {
                 }
 
                 std::array<std::pair<VertexHandle, Point2D>, 3> face2D;
+                bool canMapTo2D = true;
                 for (int i = 0; i < 3; i++) {
                     face2D[i].first = fv[i];
                     face2D[i].second = Point2D(0, 0);
@@ -523,11 +519,14 @@ void MapMesh::Remesh() {
                     for (const auto &baryCoorItem : baryCoor) {
                         if (baryCoorItem.first == commonVertex) continue;
                         if (coorMap.find(baryCoorItem.first) == coorMap.end()) {
-                            throw std::runtime_error("can't found item");
+                            canMapTo2D = false;
+                            break;
+                            /* throw std::runtime_error("can't found item"); */
                         }
                         face2D[i].second += coorMap.at(baryCoorItem.first) * baryCoorItem.second;
                     }
                 }
+                if (!canMapTo2D) continue;
 
                 std::array<Point2D, 3> triangle{face2D[0].second, face2D[1].second,
                                                 face2D[2].second};
@@ -538,19 +537,13 @@ void MapMesh::Remesh() {
 
                 point(vertex) = alpha * point(face2D[0].first) + beta * point(face2D[1].first) +
                                 gamma * point(face2D[2].first);
-                isChanged = true;
                 break;
             }
-            /* }); */
-        }
-        if (!isChanged) {
-            throw std::runtime_error("no changed for vertex" + std::to_string(vertex.idx()));
         }
         _mutex.lock();
-        i++;
+        bar.update();
         _mutex.unlock();
-        /* }); */
-    }
+    });
 }
 
 std::optional<std::tuple<int, double, double, double>> MapMesh::UpdateParam(

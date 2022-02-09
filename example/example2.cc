@@ -1,14 +1,10 @@
 #include <OpenMesh/Core/IO/MeshIO.hh>
 
 #include "MapsMesh.h"
-#include "igl/gaussian_curvature.h"
-#include "igl/principal_curvature.h"
-#include "igl/readOBJ.h"
-#include "igl/writeOBJ.h"
 
 int main(void) {
     Maps::MapMesh mesh;
-    if (!OpenMesh::IO::read_mesh(mesh, "model/newmodel.obj")) {
+    if (!OpenMesh::IO::read_mesh(mesh, "model/Armadillo.obj")) {
         std::cout << "error load mesh from file";
         return -1;
     }
@@ -24,7 +20,7 @@ int main(void) {
 
     mesh.garbage_collection();
     try {
-        if (!OpenMesh::IO::write_mesh(mesh, "model_output.off")) {
+        if (!OpenMesh::IO::write_mesh(mesh, "Armadillo_output.off")) {
             std::cerr << "Cannot write mesh to file 'output.off'" << std::endl;
             return 1;
         }

@@ -1,7 +1,6 @@
 #ifndef MAPS_BASE_MESH_H
 #define MAPS_BASE_MESH_H
 
-#include <Eigen/Dense>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
 #include <optional>
 
@@ -32,12 +31,12 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
     /**
      * @brief 计算一个面的面积
      */
-    double CalculateArea(const FaceHandle& faceHandle) const;
+    float CalculateArea(const FaceHandle& faceHandle) const;
 
     /**
      * @brief 计算一个面中一个顶点的角度
      */
-    double CalculateAngle(const VertexHandle& vertex, const FaceHandle& face) const;
+    float CalculateAngle(const VertexHandle& vertex, const FaceHandle& face) const;
 
     /**
      * @brief 尝试添加一个面
@@ -48,7 +47,7 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
      * @return true: 添加成功
      *         false: 添加失败
      */
-    bool TryToAddFace(std::array<VertexHandle, 3>&& face, FaceHandle& faceHandle);
+    bool TryToAddFace(std::array<VertexHandle, 3> face, FaceHandle& faceHandle);
 
     /**
      * @brief 尝试添加多个面
@@ -59,11 +58,13 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
      * @return true: 添加成功
      *         false: 添加失败
      */
-    bool TryToAddFaces(std::vector<std::array<VertexHandle, 3>>&& faces,
+    bool TryToAddFaces(std::vector<std::array<VertexHandle, 3>> faces,
                        std::vector<FaceHandle>& facesHandle);
 
     std::optional<FaceHandle> FindFace(const std::array<VertexHandle, 3>& faceVertices) const {
         auto half_edge = this->find_halfedge(faceVertices[0], faceVertices[1]);
+        if (!half_edge.is_valid()) return std::nullopt;
+
         if (half_edge.next().to() == faceVertices[2]) {
             return half_edge.face();
         } else if (half_edge.opp().next().to() == faceVertices[2]) {
@@ -128,7 +129,7 @@ class BaseMesh : public OpenMesh::TriMesh_ArrayKernelT<Trait> {
 };
 
 template <typename T>
-double BaseMesh<T>::CalculateArea(const FaceHandle& faceHandle) const {
+float BaseMesh<T>::CalculateArea(const FaceHandle& faceHandle) const {
 
     std::vector<VertexHandle> vertices;  //(this->fv_begin(faceHandle), this->fv_end(faceHandle));
     for (const auto& vertex : this->fv_range(faceHandle)) {
@@ -137,54 +138,33 @@ double BaseMesh<T>::CalculateArea(const FaceHandle& faceHandle) const {
     assert(vertices.size() == 3);
     auto Vec1 = this->point(vertices[1]) - this->point(vertices[0]);
     auto Vec2 = this->point(vertices[2]) - this->point(vertices[0]);
-    double area = 0.5 * Vec1.cross(Vec2).norm();
+    float area = 0.5 * Vec1.cross(Vec2).norm();
 
     return area;
 }
 
 template <typename T>
-double BaseMesh<T>::CalculateAngle(const VertexHandle& vertexHandle,
-                                   const FaceHandle& faceHandle) const {
+float BaseMesh<T>::CalculateAngle(const VertexHandle& vertexHandle,
+                                  const FaceHandle& faceHandle) const {
 
     auto point1 = this->point(vertexHandle);
-    Eigen::Vector3d vertex;
-    vertex[0] = point1[0];
-    vertex[1] = point1[1];
-    vertex[2] = point1[2];
 
-    std::vector<Eigen::Vector3d> points;
+    std::vector<Point> points;
     for (const auto& vertex : this->fv_range(faceHandle)) {
         if (vertex != vertexHandle) {
-            auto _point = this->point(vertex);
-            Eigen::Vector3d p;
-            p[0] = _point[0];
-            p[1] = _point[1];
-            p[2] = _point[2];
-            points.emplace_back(p);
+            points.emplace_back(this->point(vertex));
         }
     }
-    /* for (auto _pointIter = this->fv_begin(faceHandle); _pointIter != this->fv_end(faceHandle); */
-    /*      _pointIter++) { */
-
-    /*     if (*_pointIter != vertexHandle) { */
-    /*         auto _point = this->point(*_pointIter); */
-    /*         Eigen::Vector3d p; */
-    /*         p[0] = _point[0]; */
-    /*         p[1] = _point[1]; */
-    /*         p[2] = _point[2]; */
-    /*         points.emplace_back(p); */
-    /*     } */
-    /* } */
     assert(points.size() == 2);
 
-    auto Vec1 = points[0] - vertex;
-    auto Vec2 = points[1] - vertex;
+    auto Vec1 = points[0] - point1;
+    auto Vec2 = points[1] - point1;
 
     return std::acos(Vec1.normalized().dot(Vec2.normalized()));
 }
 
 template <typename T>
-bool BaseMesh<T>::TryToAddFace(std::array<VertexHandle, 3>&& face, FaceHandle& facesHandle) {
+bool BaseMesh<T>::TryToAddFace(std::array<VertexHandle, 3> face, FaceHandle& facesHandle) {
 
     for (int i = 0, ii = 1; i < 3; i++, ii++, ii %= 3) {
         auto half_edge = this->find_halfedge(face[i], face[ii]);
@@ -198,7 +178,7 @@ bool BaseMesh<T>::TryToAddFace(std::array<VertexHandle, 3>&& face, FaceHandle& f
 }
 
 template <typename T>
-bool BaseMesh<T>::TryToAddFaces(std::vector<std::array<VertexHandle, 3>>&& faces,
+bool BaseMesh<T>::TryToAddFaces(std::vector<std::array<VertexHandle, 3>> faces,
                                 std::vector<FaceHandle>& facesHandle) {
     facesHandle.clear();
     for (auto& face : faces) {
@@ -244,6 +224,8 @@ bool BaseMesh<T>::IsInTriangle(const Point2D& point, const std::array<Point2D, 3
 template <typename T>
 bool BaseMesh<T>::IsInTriangle(const Point& point, const std::array<Point, 3>& triangle) {
 
+    double esp = 1e-5;
+
     if (!IsCoplanar(point, triangle)) return false;
 
     auto Vec1 = (point - triangle[0]).cross(triangle[1] - triangle[0]);
@@ -254,7 +236,7 @@ bool BaseMesh<T>::IsInTriangle(const Point& point, const std::array<Point, 3>& t
     double z2 = Vec2.dot(Vec3);
     double z3 = Vec3.dot(Vec1);
 
-    return z1 >= 0 && z2 >= 0 && z3 >= 0;
+    return z1 >= -esp && z2 >= -esp && z3 >= -esp;
 }
 
 template <typename T>

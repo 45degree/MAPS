@@ -48,14 +48,14 @@ class BaseMeshTest : public testing::Test {
 TEST_F(BaseMeshTest, CalculateArea) {  // NOLINT
     auto faceHandle = mesh.face_handle(0);
     double area = mesh.CalculateArea(faceHandle);
-    ASSERT_DOUBLE_EQ(area, 2.0);
+    ASSERT_FLOAT_EQ(area, 2.0);
 }
 
 TEST_F(BaseMeshTest, CalculateAngle) {  // NOLINT
     auto faceHandle = mesh.face_handle(0);
     auto vertexHandle = mesh.vertex_handle(1);
     double angle = mesh.CalculateAngle(vertexHandle, faceHandle);
-    ASSERT_DOUBLE_EQ(angle, M_PI / 4.0);
+    ASSERT_FLOAT_EQ(angle, M_PI / 4.0);
 }
 
 TEST_F(BaseMeshTest, TryToAddFace) {  // NOLINT
